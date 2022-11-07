@@ -14,7 +14,8 @@ const (
 )
 
 type cloud struct {
-	client *cloudscale.Client
+	client        *cloudscale.Client
+	loadBalancers cloudprovider.LoadBalancer
 }
 
 func init() {
@@ -32,7 +33,8 @@ func newCloud() (cloudprovider.Interface, error) {
 	var cloudscaleClient = cloudscale.NewClient(oauthClient)
 
 	return &cloud{
-		client: cloudscaleClient,
+		client:        cloudscaleClient,
+		loadBalancers: newLoadbalancers(cloudscaleClient),
 	}, nil
 }
 
@@ -42,8 +44,7 @@ func (c cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, s
 }
 
 func (c cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
-	//TODO implement me
-	panic("implement me")
+	return c.loadBalancers, true
 }
 
 func (c cloud) Instances() (cloudprovider.Instances, bool) {
