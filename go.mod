@@ -1,4 +1,4 @@
-module cloudscale-cloud-controller-manager
+module cloud-provider-cloudscale
 
 go 1.18
 
