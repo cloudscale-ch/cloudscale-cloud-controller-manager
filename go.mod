@@ -1,11 +1,11 @@
-module cloud-provider-cloudscale
+module github.com/cloudscale-ch/cloudscale-cloud-controller-manager
 
-go 1.18
+go 1.20
 
 require (
 	github.com/cloudscale-ch/cloudscale-go-sdk v1.11.0
 	golang.org/x/oauth2 v0.9.0
-	k8s.io/api v0.27.3
+	k8s.io/api v0.27.3 // indirect
 	k8s.io/apimachinery v0.27.3
 	k8s.io/cloud-provider v0.27.3
 	k8s.io/component-base v0.27.3
@@ -39,7 +39,6 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/cel-go v0.16.0 // indirect
 	github.com/google/gnostic v0.6.9 // indirect
-	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
@@ -51,6 +50,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
+	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/moby/term v0.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -102,7 +102,7 @@ require (
 	k8s.io/component-helpers v0.27.3 // indirect
 	k8s.io/controller-manager v0.27.3 // indirect
 	k8s.io/kms v0.27.3 // indirect
-	k8s.io/kube-openapi v0.0.0-20230614213217-ba0abe644833 // indirect
+	k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f // indirect
 	k8s.io/utils v0.0.0-20230505201702-9f6742963106 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.1.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
