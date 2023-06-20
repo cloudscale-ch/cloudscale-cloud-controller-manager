@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloudscale-ccm-service-account
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cloudscale-ccm-cluster-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - nodes/status
+  verbs:
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumes
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - update
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cloudscale-ccm-cluster-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cloudscale-ccm-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: cloudscale-ccm-service-account
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cloudscale-ccm-daemonset
+  labels:
+    app: cloudscale-ccm-app
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: cloudscale-ccm-app
+  template:
+    metadata:
+      labels:
+        app: cloudscale-ccm-app
+    spec:
+      serviceAccountName: cloudscale-ccm-service-account
+      nodeSelector:
+        "node-role.kubernetes.io/master": ""
+      tolerations:
+        - key: "node-role.kubernetes.io/master"
+          effect: NoSchedule
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
+        - key: "node.cloudprovider.kubernetes.io/uninitialized"
+          value: "true"
+          effect: "NoSchedule"
+        - key: node.kubernetes.io/not-ready
+          operator: Exists
+          effect: NoSchedule
+        - key: node.kubernetes.io/unreachable
+          operator: Exists
+          effect: NoSchedule
+      hostNetwork: true
+      containers:
+        - image: quay.io/cloudscalech/cloudscale-cloud-controller-manager:latest
+          imagePullPolicy: IfNotPresent
+          name: cloudscale-cloud-controller-manager
+          command:
+            - "/cloudscale-cloud-controller-manager"
+            - "--v=3"
+          env:
+            - name: CLOUDSCALE_API_URL
+              value: https://api.cloudscale.ch/
+            - name: CLOUDSCALE_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudscale
+                  key: access-token
