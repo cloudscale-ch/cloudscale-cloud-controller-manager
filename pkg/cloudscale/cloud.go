@@ -2,27 +2,55 @@ package cloudscale
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"github.com/cloudscale-ch/cloudscale-go-sdk"
 	"golang.org/x/oauth2"
 	"io"
 	"k8s.io/klog/v2"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 import cloudprovider "k8s.io/cloud-provider"
 
 const (
-	ProviderName = "cloudscale"
+	ProviderName   = "cloudscale"
+	AccessToken    = "CLOUDSCALE_ACCESS_TOKEN"
+	ApiUrl         = "CLOUDSCALE_API_URL"
+	ApiTimeout     = "CLOUDSCALE_API_TIMEOUT"
+	DefaultTimeout = time.Duration(5) * time.Second
 )
 
 // cloud implements cloudprovider.Interface
 type cloud struct {
+	// access to the cloudscale API
 	client *cloudscale.Client
+
+	// timeout used for the API access (informational only, changing it does
+	// not influence the active API client)
+	timeout time.Duration
 }
 
 // Register this provider with Kubernetes
 func init() {
 	cloudprovider.RegisterCloudProvider(ProviderName, newCloudscaleProvider)
+}
+
+// maskAccessToken returns the given token with most of the information hidden
+func maskAccessToken(token string) string {
+	if len(token) < 4 {
+		return ""
+	}
+	return fmt.Sprintf("%.4s%s", token, strings.Repeat("*", len(token)-4))
+}
+
+// apiTimeout returns the configured timeout or the default one
+func apiTimeout() time.Duration {
+	if seconds, _ := strconv.Atoi(os.Getenv(ApiTimeout)); seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	return DefaultTimeout
 }
 
 // newCloudscaleProvider creates the provider, ready to be registered
@@ -31,29 +59,43 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 		klog.Warning("--cloud-config received but ignored")
 	}
 
-	var token = os.Getenv("CLOUDSCALE_ACCESS_TOKEN")
+	var token = os.Getenv(AccessToken)
 	if len(token) == 0 {
-		return nil, errors.New("no CLOUDSCALE_ACCESS_TOKEN configured")
+		return nil, fmt.Errorf("no %s configured", AccessToken)
 	}
 
+	// Always use a sensible timeout for operations, as the default is ∞
+	timeout := func() time.Duration {
+		if seconds, _ := strconv.Atoi(os.Getenv(ApiTimeout)); seconds > 0 {
+			return time.Duration(seconds) * time.Second
+		}
+		return 5 * time.Second
+	}()
+
 	return &cloud{
-		client: newCloudscaleClient(token),
+		client:  newCloudscaleClient(token, timeout),
+		timeout: apiTimeout(),
 	}, nil
 }
 
 // newCloudscaleClient spawns a new cloudscale API client
-func newCloudscaleClient(token string) *cloudscale.Client {
-	klog.InfoS(
-		"cloudscale API client",
-		"url", os.Getenv("CLOUDSCALE_API_URL"),
-		"token", os.Getenv("CLOUDSCALE_API_TOKEN")[:4]+"...",
-	)
+func newCloudscaleClient(token string, timeout time.Duration) *cloudscale.Client {
+
 	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{
 		AccessToken: token,
 	})
-	oauthClient := oauth2.NewClient(context.Background(), tokenSource)
 
-	return cloudscale.NewClient(oauthClient)
+	httpClient := oauth2.NewClient(context.Background(), tokenSource)
+	httpClient.Timeout = timeout
+
+	klog.InfoS(
+		"cloudscale API client",
+		"url", os.Getenv(ApiUrl),
+		"token", maskAccessToken(os.Getenv(AccessToken)),
+		"timeout", timeout,
+	)
+
+	return cloudscale.NewClient(httpClient)
 }
 
 // Initialize provides the cloud with a kubernetes client builder and may spawn goroutines
