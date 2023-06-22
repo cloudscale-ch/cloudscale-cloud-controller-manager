@@ -1,4 +1,4 @@
-.PHONY: build lint
+.PHONY: build lint test
 
 build:
 	go build -trimpath -o builds/cloudscale-cloud-controller-manager \
@@ -6,3 +6,6 @@ build:
 
 lint:
 	golangci-lint run
+
+test:
+	go test -coverpkg=./pkg/... ./pkg/...
