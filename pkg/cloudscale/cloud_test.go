@@ -9,17 +9,30 @@ import (
 )
 
 func TestMaskAccessToken(t *testing.T) {
-	maskedAccessTokens := [][]string{
-		{"", ""},
-		{"12345789abcdefghijklmnopqrstuvwx", "1234****************************"},
+	testCases := []struct {
+		label    string
+		input    string
+		expected string
+	}{
+		{
+			"Empty Access Token",
+			"",
+			"",
+		},
+		{
+			"Secret Access Token",
+			"12345789abcdefghijklmnopqrstuvwx",
+			"1234****************************",
+		},
 	}
 
-	for _, pair := range maskedAccessTokens {
-		result := maskAccessToken(pair[0])
-
-		if result != pair[1] {
-			t.Errorf("maskAccessToken: expected %s for %s, got %s", pair[1], pair[0], result)
-		}
+	for _, tc := range testCases {
+		t.Run(tc.label, func(t *testing.T) {
+			r := maskAccessToken(tc.input)
+			if r != tc.expected {
+				t.Errorf("expected %s for %s, got %s", tc.expected, tc.input, r)
+			}
+		})
 	}
 }
 
