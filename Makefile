@@ -1,7 +1,7 @@
 .PHONY: build lint test
 
 build:
-	go build -trimpath -o builds/cloudscale-cloud-controller-manager \
+	go build -trimpath -o bin/cloudscale-cloud-controller-manager \
 		cmd/cloudscale-cloud-controller-manager/main.go
 
 lint:
