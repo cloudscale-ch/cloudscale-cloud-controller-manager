@@ -1,0 +1,141 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:cloud-controller-manager
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - nodes/status
+  verbs:
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumes
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - create
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:cloud-controller-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:cloud-controller-manager
+subjects:
+- kind: ServiceAccount
+  name: cloud-controller-manager
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloud-controller-manager
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cloudscale-cloud-controller-manager
+  namespace: kube-system
+  labels:
+    k8s-app: cloudscale-cloud-controller-manager
+spec:
+  selector:
+    matchLabels:
+      k8s-app: cloudscale-cloud-controller-manager
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        k8s-app: cloudscale-cloud-controller-manager
+    spec:
+      serviceAccountName: cloud-controller-manager
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: "node-role.kubernetes.io/control-plane"
+          effect: NoSchedule
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
+        - key: "node.cloudprovider.kubernetes.io/uninitialized"
+          value: "true"
+          effect: "NoSchedule"
+      hostNetwork: true
+      containers:
+        - name: cloudscale-cloud-controller-manager
+          image: quay.io/cloudscalech/cloudscale-cloud-controller-manager:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - "cloudscale-cloud-controller-manager"
+            - "--allow-untagged-cloud"
+            - "--v=3"
+          env:
+            - name: CLOUDSCALE_API_URL
+              value: https://api.cloudscale.ch/
+            - name: CLOUDSCALE_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudscale
+                  key: access-token
