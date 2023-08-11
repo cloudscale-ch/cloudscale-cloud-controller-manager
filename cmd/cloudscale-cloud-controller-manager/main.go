@@ -62,5 +62,8 @@ func cloudInitializer(config *config.CompletedConfig) cloudprovider.Interface {
 				"allow-untagged-cloud option")
 		}
 	}
+
+	klog.Info("cloudscale-cloud-controller-manager initialized")
+
 	return cloud
 }
