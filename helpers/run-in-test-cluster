@@ -77,7 +77,7 @@ function apply-resources() {
     deploy/kubernetes/releases/latest.yml > /tmp/ccm.yml
 
   export KUBECONFIG=k8test/cluster/admin.conf
-  kubectl delete -f /tmp/ccm.yml || true
+  kubectl delete -f /tmp/ccm.yml --ignore-not-found=true
   kubectl apply -f /tmp/ccm.yml
 }
 
