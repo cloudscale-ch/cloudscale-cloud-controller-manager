@@ -6,6 +6,7 @@ build:
 
 lint:
 	golangci-lint run
+	staticcheck ./...
 
 test:
 	go test -race -coverpkg=./pkg/... ./pkg/...
