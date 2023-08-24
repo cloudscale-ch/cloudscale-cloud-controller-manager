@@ -74,8 +74,12 @@ function build-container() {
 
 # Re-apply the resources each time
 function apply-resources() {
+  api_url=$(echo "${CLOUDSCALE_API_URL-https://api.cloudscale.ch}" | sed 's|/v1||g')
+
   sed 's/controller-manager:latest/controller-manager:test/g' \
-    deploy/kubernetes/releases/latest.yml > /tmp/ccm.yml
+    deploy/kubernetes/releases/latest.yml \
+    | sed "s|https://api.cloudscale.ch|${api_url}|g" \
+    > /tmp/ccm.yml
 
   export KUBECONFIG=k8test/cluster/admin.conf
   kubectl delete -f /tmp/ccm.yml --ignore-not-found=true
