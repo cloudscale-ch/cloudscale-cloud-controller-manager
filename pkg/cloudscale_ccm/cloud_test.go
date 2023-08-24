@@ -1,4 +1,4 @@
-package cloudscale
+package cloudscale_ccm
 
 import (
 	"errors"
@@ -6,34 +6,21 @@ import (
 	"testing"
 	"testing/iotest"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMaskAccessToken(t *testing.T) {
-	testCases := []struct {
-		label    string
-		input    string
-		expected string
-	}{
-		{
-			"Empty Access Token",
-			"",
-			"",
-		},
-		{
-			"Secret Access Token",
-			"12345789abcdefghijklmnopqrstuvwx",
-			"1234****************************",
-		},
+
+	assertMasked := func(input string, expected string) {
+		assert.Equal(t, expected, maskAccessToken(input))
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.label, func(t *testing.T) {
-			r := maskAccessToken(tc.input)
-			if r != tc.expected {
-				t.Errorf("expected %s for %s, got %s", tc.expected, tc.input, r)
-			}
-		})
-	}
+	assertMasked("", "")
+	assertMasked(
+		"12345789abcdefghijklmnopqrstuvwx",
+		"1234****************************",
+	)
 }
 
 func TestNewCloudscaleProviderWithoutToken(t *testing.T) {
