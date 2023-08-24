@@ -48,13 +48,14 @@ function ensure-inventory() {
   if ! test -f k8test/cluster/ssh.pub; then
     ssh-keygen -t ed25519 -N '' -f k8test/cluster/ssh
   fi
-
+ 
   if ! test -f k8test/cluster/inventory.yml; then
     k8test/playbooks/create-cluster.yml \
       -e zone="$(random-zone)" \
       -e ssh_key=k8test/cluster/ssh.pub \
       -e control_count=2 \
-      -e worker_count=2
+      -e worker_count=2 \
+      -e kubelet_extra_args='--cloud-provider=external'
 
     # Those won't really change between runs, so update them during install
     k8test/playbooks/update-secrets.yml \
