@@ -1,0 +1,67 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  Linting:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.53.3
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@2023.1.5
+
+      - name: Run Linter
+        run: make lint
+
+  Units:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run Unit Tests
+        run: make test
+
+  Integrations:
+    runs-on: ubuntu-latest
+    needs: Units
+
+    env:
+      CLOUDSCALE_API_TOKEN: ${{ secrets.CLOUDSCALE_API_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Create Test Cluster
+        run: helpers/run-in-test-cluster
+
+      - name: Wait For CCM Startup
+        run: sleep 60
+
+      - name: Run Integration Tests
+        run: make integration
+
+      - name: Destroy Test Cluster
+        if: always()
+        run: helpers/cleanup

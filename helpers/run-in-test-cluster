@@ -2,13 +2,30 @@
 #
 # Ensures that a Kubernetes test cluster is present and updated
 #
+# shellcheck source=/dev/null
 set -euo pipefail
+
+export ANSIBLE_CONFIG="$PWD"/k8test/ansible.cfg
 
 # Prepares k8test with an existing virtual env, or a newly created on
 function ensure-k8test() {
+
+  # On GitHub actions, things are a bit different. Ansible is actually found
+  # on the runners and cloning via SSH does not work.
+  #
+  # Therefore we run a separate install block that is only meant for GitHub.
+  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    mkdir -p ~/.ssh/ && touch ~/.ssh/known_hosts
+    git clone https://github.com/cloudscale-ch/k8test
+    python3 -m venv k8test/venv
+    source k8test/venv/bin/activate 
+    pip install poetry
+    poetry install --directory k8test
+    return
+  fi
+
   if ! test -d k8test; then
     git clone git@github.com:cloudscale-ch/k8test.git
-    git -C k8test switch denis/init
   fi
 
   if [[ "${VIRTUAL_ENV:-}" == "" ]]; then
@@ -17,7 +34,6 @@ function ensure-k8test() {
       python3 -m venv k8test/venv
     fi
 
-    # shellcheck source=/dev/null
     source k8test/venv/bin/activate
   fi
 

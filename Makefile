@@ -9,10 +9,10 @@ lint:
 	staticcheck ./...
 
 test:
-	go test -race -coverpkg=./pkg/cloudscale_ccm -coverprofile cover.out ./pkg/cloudscale_ccm
+	go test -race -coverpkg=./pkg/cloudscale_ccm -coverprofile cover.out ./pkg/cloudscale_ccm -v
 
 integration:
-	K8TEST_PATH=${PWD}/k8test go test -count=1 -tags=integration ./pkg/internal/integration
+	K8TEST_PATH=${PWD}/k8test go test -count=1 -tags=integration ./pkg/internal/integration -v
 
 coverage: test
 	go tool cover -html=cover.out
