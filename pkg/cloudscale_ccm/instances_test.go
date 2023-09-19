@@ -86,11 +86,11 @@ func TestInstanceMetadata(t *testing.T) {
 					},
 				},
 			},
+			ZonalResource: cloudscale.ZonalResource{
+				Zone: cloudscale.Zone{Slug: "rma1"},
+			},
 		},
 	}
-
-	// Promoted fields cannot be initalized using composite literals
-	servers[0].Zone.Slug = "rma1"
 
 	i := instances{serverMapper: &staticServerMapper{servers: servers}}
 
