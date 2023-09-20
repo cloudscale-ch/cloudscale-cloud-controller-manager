@@ -80,7 +80,7 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 	return &cloud{
 		timeout: apiTimeout(),
 		instances: &instances{
-			serverMapper: &apiServerMapper{client: client},
+			srv: serverMapper{client: client},
 		},
 	}, nil
 }

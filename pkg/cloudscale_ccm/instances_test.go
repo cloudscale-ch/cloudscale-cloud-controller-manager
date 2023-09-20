@@ -11,12 +11,15 @@ import (
 )
 
 func TestInstanceExists(t *testing.T) {
-	i := instances{
-		serverMapper: &staticServerMapper{servers: []cloudscale.Server{
-			{UUID: "c2e4aabd-8c91-46da-b069-71e01f439806", Name: "foo"},
-			{UUID: "5ac4afba-57b3-40d7-b34a-9da7056176fd", Name: "bar"},
-		}},
-	}
+	server := testkit.NewMockAPIServer()
+	server.WithServers([]cloudscale.Server{
+		{UUID: "c2e4aabd-8c91-46da-b069-71e01f439806", Name: "foo"},
+		{UUID: "5ac4afba-57b3-40d7-b34a-9da7056176fd", Name: "bar"},
+	})
+	server.Start()
+	defer server.Close()
+
+	i := instances{srv: serverMapper{client: server.Client()}}
 
 	assertExists := func(exists bool, node *v1.Node) {
 		actual, err := i.InstanceExists(context.Background(), node)
@@ -37,13 +40,16 @@ func TestInstanceExists(t *testing.T) {
 }
 
 func TestInstanceShutdown(t *testing.T) {
-	i := instances{
-		serverMapper: &staticServerMapper{servers: []cloudscale.Server{
-			{Name: "foo", Status: "stopped"},
-			{Name: "bar", Status: "started"},
-			{Name: "baz", Status: "changing"},
-		}},
-	}
+	server := testkit.NewMockAPIServer()
+	server.WithServers([]cloudscale.Server{
+		{Name: "foo", Status: "stopped"},
+		{Name: "bar", Status: "started"},
+		{Name: "baz", Status: "changing"},
+	})
+	server.Start()
+	defer server.Close()
+
+	i := instances{srv: serverMapper{client: server.Client()}}
 
 	assertShutdown := func(shutdown bool, node *v1.Node) {
 		actual, err := i.InstanceShutdown(context.Background(), node)
@@ -64,7 +70,8 @@ func TestInstanceShutdown(t *testing.T) {
 }
 
 func TestInstanceMetadata(t *testing.T) {
-	servers := []cloudscale.Server{
+	server := testkit.NewMockAPIServer()
+	server.WithServers([]cloudscale.Server{
 		{
 			UUID: "cdc81195-f37e-46b6-827b-2aa824cfbc82",
 			Name: "worker-1",
@@ -90,9 +97,11 @@ func TestInstanceMetadata(t *testing.T) {
 				Zone: cloudscale.Zone{Slug: "rma1"},
 			},
 		},
-	}
+	})
+	server.Start()
+	defer server.Close()
 
-	i := instances{serverMapper: &staticServerMapper{servers: servers}}
+	i := instances{srv: serverMapper{client: server.Client()}}
 
 	meta, err := i.InstanceMetadata(
 		context.Background(),
@@ -116,11 +125,14 @@ func TestInstanceMetadata(t *testing.T) {
 }
 
 func TestInvalidNodeProvider(t *testing.T) {
-	i := instances{
-		serverMapper: &staticServerMapper{servers: []cloudscale.Server{
-			{Name: "foo"},
-		}},
-	}
+	server := testkit.NewMockAPIServer()
+	server.WithServers([]cloudscale.Server{
+		{Name: "foo"},
+	})
+	server.Start()
+	defer server.Close()
+
+	i := instances{srv: serverMapper{client: server.Client()}}
 
 	node := testkit.NewNode("").WithProviderID("cloudscale://invalid").V1()
 

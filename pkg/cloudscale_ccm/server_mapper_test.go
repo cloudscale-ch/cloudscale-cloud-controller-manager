@@ -11,27 +11,31 @@ import (
 )
 
 func TestServerByNode(t *testing.T) {
-	mapper := staticServerMapper{servers: []cloudscale.Server{
+	server := testkit.NewMockAPIServer()
+	server.WithServers([]cloudscale.Server{
 		{UUID: "c2e4aabd-8c91-46da-b069-71e01f439806", Name: "foo"},
 		{UUID: "5ac4afba-57b3-40d7-b34a-9da7056176fd", Name: "bar"},
 		{UUID: "096c58ff-41c5-44fa-9ba3-05defce2062a", Name: "clone"},
 		{UUID: "85dffa20-8097-4d75-afa6-9e4372047ce6", Name: "clone"},
-	}}
+	})
+	server.Start()
+	defer server.Close()
+
+	mapper := serverMapper{client: server.Client()}
 
 	assertMatch := func(name string, node *v1.Node) {
-		match, err := mapper.byNode(context.Background(), node)
+		match, err := mapper.findByNode(context.Background(), node).one()
 		assert.NoError(t, err)
 		assert.Equal(t, name, match.Name)
 	}
 
 	assertMissing := func(node *v1.Node) {
-		match, err := mapper.byNode(context.Background(), node)
+		err := mapper.findByNode(context.Background(), node).none()
 		assert.NoError(t, err)
-		assert.Nil(t, match)
 	}
 
 	assertError := func(node *v1.Node) {
-		_, err := mapper.byNode(context.Background(), node)
+		_, err := mapper.findByNode(context.Background(), node).one()
 		assert.Error(t, err)
 	}
 
@@ -70,10 +74,16 @@ func TestServerByNode(t *testing.T) {
 }
 
 func TestNoServers(t *testing.T) {
-	mapper := staticServerMapper{servers: []cloudscale.Server{}}
+	server := testkit.NewMockAPIServer()
+	server.On("/v1/servers", 200, "[]")
+	server.On("/v1/servers/9a8fa1fc-7fb4-4503-b0d6-b946912a99f1", 404, "{}")
+	server.Start()
+	defer server.Close()
+
+	mapper := serverMapper{client: server.Client()}
 
 	assertMissing := func(node *v1.Node) {
-		match, err := mapper.byNode(context.Background(), node)
+		match, err := mapper.findByNode(context.Background(), node).atMostOne()
 		assert.NoError(t, err)
 		assert.Nil(t, match)
 	}
@@ -82,24 +92,4 @@ func TestNoServers(t *testing.T) {
 	assertMissing(testkit.NewNode("foo").V1())
 	assertMissing(testkit.NewNode("").WithProviderID(
 		"cloudscale://9a8fa1fc-7fb4-4503-b0d6-b946912a99f1").V1())
-}
-
-func TestBadServerMapper(t *testing.T) {
-	// This should never happen, but if it does we want an error, not a panic
-	mapper := &staticServerMapper{
-		servers: []cloudscale.Server{
-			{
-				UUID: "invalid-uuid-reported-by-api",
-				Name: "foo",
-			},
-		},
-	}
-
-	_, err := mapper.byNode(
-		context.Background(),
-		testkit.NewNode("").WithProviderID(
-			"cloudscale://9a8fa1fc-7fb4-4503-b0d6-b946912a99f1").V1(),
-	)
-
-	assert.Error(t, err)
 }

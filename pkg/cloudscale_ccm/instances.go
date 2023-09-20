@@ -12,7 +12,7 @@ import (
 )
 
 type instances struct {
-	serverMapper serverMapper
+	srv serverMapper
 }
 
 // InstanceExists returns true if the instance for the given node exists
@@ -21,7 +21,7 @@ type instances struct {
 func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 	bool, error) {
 
-	server, err := i.serverMapper.byNode(ctx, node)
+	server, err := i.srv.findByNode(ctx, node).atMostOne()
 
 	if err != nil {
 		return false, err
@@ -50,7 +50,7 @@ func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (
 	bool, error) {
 
-	server, err := ensureOne(i.serverMapper.byNode(ctx, node))
+	server, err := i.srv.findByNode(ctx, node).one()
 
 	if err != nil {
 		return false, err
@@ -74,7 +74,7 @@ func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (
 func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (
 	*cloudprovider.InstanceMetadata, error) {
 
-	server, err := ensureOne(i.serverMapper.byNode(ctx, node))
+	server, err := i.srv.findByNode(ctx, node).one()
 
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (
 	}
 
 	providerID := cloudscaleProviderID{id: id}.String()
-	addresses := serverNodeAddresses(server)
+	addresses := i.srv.nodeAddresses(server)
 
 	klog.InfoS(
 		"instance metadata found",
