@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk"
+	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v3"
 	"golang.org/x/oauth2"
 	"k8s.io/klog/v2"
 

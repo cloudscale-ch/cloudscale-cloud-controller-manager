@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v3"
 	v1 "k8s.io/api/core/v1"
 )
 
