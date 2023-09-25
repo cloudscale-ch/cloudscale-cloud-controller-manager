@@ -1,20 +1,23 @@
-package cloudscale
+package cloudscale_ccm
 
 import (
 	"context"
 	"fmt"
-	"github.com/cloudscale-ch/cloudscale-go-sdk"
-	"golang.org/x/oauth2"
 	"io"
-	"k8s.io/klog/v2"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/cloudscale-ch/cloudscale-go-sdk"
+	"golang.org/x/oauth2"
+	"k8s.io/klog/v2"
+
+	cloudprovider "k8s.io/cloud-provider"
 )
-import cloudprovider "k8s.io/cloud-provider"
 
 const (
+	// Under no circumstances can this string change. It is for eterentiy.
 	ProviderName   = "cloudscale"
 	AccessToken    = "CLOUDSCALE_ACCESS_TOKEN"
 	ApiUrl         = "CLOUDSCALE_API_URL"
@@ -24,12 +27,12 @@ const (
 
 // cloud implements cloudprovider.Interface
 type cloud struct {
-	// access to the cloudscale API
-	client *cloudscale.Client
-
 	// timeout used for the API access (informational only, changing it does
 	// not influence the active API client)
 	timeout time.Duration
+
+	// CCM endpoints
+	instances *instances
 }
 
 // Register this provider with Kubernetes
@@ -72,9 +75,13 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 		return 5 * time.Second
 	}()
 
+	client := newCloudscaleClient(token, timeout)
+
 	return &cloud{
-		client:  newCloudscaleClient(token, timeout),
 		timeout: apiTimeout(),
+		instances: &instances{
+			srv: serverMapper{client: client},
+		},
 	}, nil
 }
 
@@ -102,18 +109,15 @@ func newCloudscaleClient(token string, timeout time.Duration) *cloudscale.Client
 // to perform housekeeping or run custom controllers specific to the cloud provider.
 // Any tasks started here should be cleaned up when the stop channel closes.
 func (c cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
-	klog.Info("called Initialize")
 }
 
 // LoadBalancer returns a balancer interface. Also returns true if the interface is supported, false otherwise.
 func (c cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
-	klog.Info("called LoadBalancer")
 	return nil, false
 }
 
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (c cloud) Instances() (cloudprovider.Instances, bool) {
-	klog.Info("called Instances")
 	return nil, false
 }
 
@@ -122,38 +126,32 @@ func (c cloud) Instances() (cloudprovider.Instances, bool) {
 // API calls to the cloud provider when registering and syncing nodes. Implementation of this interface will
 // disable calls to the Zones interface. Also returns true if the interface is supported, false otherwise.
 func (c cloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
-	klog.Info("called InstancesV2")
-	return nil, false
+	return c.instances, true
 }
 
 // Zones returns a zones interface. Also returns true if the interface is supported, false otherwise.
 // DEPRECATED: Zones is deprecated in favor of retrieving zone/region information from InstancesV2.
 // This interface will not be called if InstancesV2 is enabled.
 func (c cloud) Zones() (cloudprovider.Zones, bool) {
-	klog.Info("called Zones")
 	return nil, false
 }
 
 // Clusters returns a clusters interface.  Also returns true if the interface is supported, false otherwise.
 func (c cloud) Clusters() (cloudprovider.Clusters, bool) {
-	klog.Info("called Clusters")
 	return nil, false
 }
 
 // Routes returns a routes interface along with whether the interface is supported.
 func (c cloud) Routes() (cloudprovider.Routes, bool) {
-	klog.Info("called Routes")
 	return nil, false
 }
 
 // ProviderName returns the cloud provider ID.
 func (c cloud) ProviderName() string {
-	klog.Info("called ProviderName")
 	return ProviderName
 }
 
 // HasClusterID returns true if a ClusterID is required and set
 func (c cloud) HasClusterID() bool {
-	klog.Info("called HasClusterID")
 	return false
 }
