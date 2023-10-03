@@ -91,8 +91,10 @@ func (s *serverMapper) findByName(
 	return newLimiter[cloudscale.Server](nil, matches...)
 }
 
-// serverNodeAddresses returns a v1.nodeAddresses slice for the metadata
-func (s *serverMapper) nodeAddresses(server *cloudscale.Server) []v1.NodeAddress {
+// nodeAddresses returns a v1.nodeAddresses slice for the metadata
+func (s *serverMapper) nodeAddresses(
+	server *cloudscale.Server) []v1.NodeAddress {
+
 	if server == nil {
 		return []v1.NodeAddress{}
 	}

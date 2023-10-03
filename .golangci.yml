@@ -1,0 +1,22 @@
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - exportloopref
+    - gosimple
+    - govet
+    - ineffassign
+    - lll
+    - staticcheck
+    - unused
+
+linters-settings:
+  lll:
+    line-length: 80
+    tab-width: 4
+
+issues:
+  exclude-rules:
+    - linters:
+      - lll
+      source: ".+LoadBalancer|// http(s)://"
