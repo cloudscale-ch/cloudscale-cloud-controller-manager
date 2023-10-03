@@ -22,17 +22,13 @@ const (
 	AccessToken    = "CLOUDSCALE_ACCESS_TOKEN"
 	ApiUrl         = "CLOUDSCALE_API_URL"
 	ApiTimeout     = "CLOUDSCALE_API_TIMEOUT"
-	DefaultTimeout = time.Duration(5) * time.Second
+	DefaultTimeout = time.Duration(15) * time.Second
 )
 
 // cloud implements cloudprovider.Interface
 type cloud struct {
-	// timeout used for the API access (informational only, changing it does
-	// not influence the active API client)
-	timeout time.Duration
-
-	// CCM endpoints
-	instances *instances
+	instances    *instances
+	loadbalancer *loadbalancer
 }
 
 // Register this provider with Kubernetes
@@ -67,18 +63,9 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 		return nil, fmt.Errorf("no %s configured", AccessToken)
 	}
 
-	// Always use a sensible timeout for operations, as the default is ∞
-	timeout := func() time.Duration {
-		if seconds, _ := strconv.Atoi(os.Getenv(ApiTimeout)); seconds > 0 {
-			return time.Duration(seconds) * time.Second
-		}
-		return 5 * time.Second
-	}()
-
-	client := newCloudscaleClient(token, timeout)
+	client := newCloudscaleClient(token, apiTimeout())
 
 	return &cloud{
-		timeout: apiTimeout(),
 		instances: &instances{
 			srv: serverMapper{client: client},
 		},
