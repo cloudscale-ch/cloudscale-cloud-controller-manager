@@ -1,4 +1,4 @@
-package cloudscale_ccm
+package limiter
 
 import (
 	"errors"
@@ -8,73 +8,73 @@ import (
 )
 
 func TestError(t *testing.T) {
-	lim := newLimiter[string](errors.New("fail"), "foo")
+	lim := New[string](errors.New("fail"), "foo")
 
-	v, err := lim.one()
+	v, err := lim.One()
 	assert.Error(t, err)
 	assert.Nil(t, v)
 
-	_, err = lim.all()
+	_, err = lim.All()
 	assert.Error(t, err)
 
-	err = lim.none()
+	err = lim.None()
 	assert.Error(t, err)
 }
 
 func TestFoundOne(t *testing.T) {
-	lim := newLimiter[string](nil, "foo")
+	lim := New[string](nil, "foo")
 
-	v, err := lim.one()
+	v, err := lim.One()
 	assert.NoError(t, err)
 	assert.Equal(t, "foo", *v)
 }
 
 func TestNotFoundOne(t *testing.T) {
-	lim := newLimiter[string](nil)
+	lim := New[string](nil)
 
-	v, err := lim.one()
+	v, err := lim.One()
 	assert.Error(t, err)
 	assert.Nil(t, v)
 }
 
 func TestAtMostOneEmpty(t *testing.T) {
-	lim := newLimiter[string](nil)
+	lim := New[string](nil)
 
-	v, err := lim.atMostOne()
+	v, err := lim.AtMostOne()
 	assert.NoError(t, err)
 	assert.Nil(t, v)
 }
 
 func TestAtMostOne(t *testing.T) {
-	lim := newLimiter[string](nil, "foo")
+	lim := New[string](nil, "foo")
 
-	v, err := lim.atMostOne()
+	v, err := lim.AtMostOne()
 	assert.NoError(t, err)
 	assert.Equal(t, "foo", *v)
 }
 
 func TestAtMostOneTooMany(t *testing.T) {
-	lim := newLimiter[string](nil, "foo", "bar")
+	lim := New[string](nil, "foo", "bar")
 
-	v, err := lim.atMostOne()
+	v, err := lim.AtMostOne()
 	assert.Error(t, err)
 	assert.Nil(t, v)
 }
 
 func TestNone(t *testing.T) {
-	lim := newLimiter[string](nil)
-	assert.Nil(t, lim.none())
+	lim := New[string](nil)
+	assert.Nil(t, lim.None())
 }
 
 func TestNoneNotEmpty(t *testing.T) {
-	lim := newLimiter[string](nil, "foo")
-	assert.Error(t, lim.none())
+	lim := New[string](nil, "foo")
+	assert.Error(t, lim.None())
 }
 
 func TestAll(t *testing.T) {
-	lim := newLimiter[string](nil, "foo", "bar")
+	lim := New[string](nil, "foo", "bar")
 
-	v, err := lim.all()
+	v, err := lim.All()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"foo", "bar"}, v)
 }

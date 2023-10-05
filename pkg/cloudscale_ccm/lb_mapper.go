@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/limiter"
 	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v3"
 )
 
@@ -17,7 +18,7 @@ type lbMapper struct {
 func (l *lbMapper) findByServiceInfo(
 	ctx context.Context,
 	serviceInfo *serviceInfo,
-) *limiter[cloudscale.LoadBalancer] {
+) *limiter.Limiter[cloudscale.LoadBalancer] {
 
 	if uuid := serviceInfo.annotation(LoadBalancerUUID); uuid != "" {
 		return l.getByUUID(ctx, uuid)
@@ -29,20 +30,20 @@ func (l *lbMapper) findByServiceInfo(
 func (l *lbMapper) getByUUID(
 	ctx context.Context,
 	uuid string,
-) *limiter[cloudscale.LoadBalancer] {
+) *limiter.Limiter[cloudscale.LoadBalancer] {
 
 	server, err := l.client.LoadBalancers.Get(ctx, uuid)
 	if err != nil {
 		var response *cloudscale.ErrorResponse
 
 		if errors.As(err, &response) && response.StatusCode == 404 {
-			return newLimiter[cloudscale.LoadBalancer](nil)
+			return limiter.New[cloudscale.LoadBalancer](nil)
 		}
 
-		return newLimiter[cloudscale.LoadBalancer](err)
+		return limiter.New[cloudscale.LoadBalancer](err)
 	}
 
-	return newLimiter[cloudscale.LoadBalancer](nil, *server)
+	return limiter.New[cloudscale.LoadBalancer](nil, *server)
 }
 
 // findByName returns loadbalancers matching the given name (there may be
@@ -50,16 +51,16 @@ func (l *lbMapper) getByUUID(
 func (l *lbMapper) findByName(
 	ctx context.Context,
 	name string,
-) *limiter[cloudscale.LoadBalancer] {
+) *limiter.Limiter[cloudscale.LoadBalancer] {
 
 	if name == "" {
-		return newLimiter[cloudscale.LoadBalancer](
+		return limiter.New[cloudscale.LoadBalancer](
 			errors.New("no load balancer with empty name found"))
 	}
 
 	lbs, err := l.client.LoadBalancers.List(ctx)
 	if err != nil {
-		return newLimiter[cloudscale.LoadBalancer](err)
+		return limiter.New[cloudscale.LoadBalancer](err)
 	}
 
 	matches := []cloudscale.LoadBalancer{}
@@ -71,5 +72,5 @@ func (l *lbMapper) findByName(
 		}
 	}
 
-	return newLimiter[cloudscale.LoadBalancer](nil, matches...)
+	return limiter.New[cloudscale.LoadBalancer](nil, matches...)
 }

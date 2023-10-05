@@ -1,31 +1,31 @@
-package cloudscale_ccm
+package limiter
 
 import "fmt"
 
-// limiter is used to wrap slice responses with functions to assert that
+// Limiter is used to wrap slice responses with functions to assert that
 // an expected number of elements was found.
-type limiter[T any] struct {
+type Limiter[T any] struct {
 	Error    error
 	elements []T
 }
 
-func newLimiter[T any](err error, elements ...T) *limiter[T] {
-	return &limiter[T]{
+func New[T any](err error, elements ...T) *Limiter[T] {
+	return &Limiter[T]{
 		Error:    err,
 		elements: elements,
 	}
 }
 
-// all returns the full set of answers
-func (t *limiter[T]) all() ([]T, error) {
+// All returns the full set of answers
+func (t *Limiter[T]) All() ([]T, error) {
 	if t.Error != nil {
 		return nil, t.Error
 	}
 	return t.elements, nil
 }
 
-// one returns exactly one item, or an error.
-func (t *limiter[T]) one() (*T, error) {
+// One returns exactly One item, or an error.
+func (t *Limiter[T]) One() (*T, error) {
 	if t.Error != nil {
 		return nil, t.Error
 	}
@@ -38,8 +38,8 @@ func (t *limiter[T]) one() (*T, error) {
 	return &t.elements[0], nil
 }
 
-// none returns nil if there is no element, or an error
-func (t *limiter[T]) none() error {
+// None returns nil if there is no element, or an error
+func (t *Limiter[T]) None() error {
 	if t.Error != nil {
 		return t.Error
 	}
@@ -49,8 +49,8 @@ func (t *limiter[T]) none() error {
 	return nil
 }
 
-// atMostOne returns no item (nil) or one, or fails with an error
-func (t *limiter[T]) atMostOne() (*T, error) {
+// AtMostOne returns no item (nil) or one, or fails with an error
+func (t *Limiter[T]) AtMostOne() (*T, error) {
 	if t.Error != nil {
 		return nil, t.Error
 	}

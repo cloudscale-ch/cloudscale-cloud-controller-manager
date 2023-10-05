@@ -192,9 +192,11 @@ func actualLbState(
 ) (*lbState, error) {
 
 	// Get the loadbalancer
-	lb, err := l.findByServiceInfo(ctx, serviceInfo).atMostOne()
+	lb, err := l.findByServiceInfo(ctx, serviceInfo).AtMostOne()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+			"unable to get load balancer for %s: %w",
+			serviceInfo.Service.Name, err)
 	}
 	if lb == nil {
 		return &lbState{}, nil

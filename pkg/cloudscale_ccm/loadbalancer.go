@@ -2,6 +2,7 @@ package cloudscale_ccm
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v3"
 	v1 "k8s.io/api/core/v1"
@@ -182,10 +183,11 @@ func (l *loadbalancer) GetLoadBalancer(
 		return nil, false, nil
 	}
 
-	instance, err := l.lbs.findByServiceInfo(ctx, serviceInfo).atMostOne()
+	instance, err := l.lbs.findByServiceInfo(ctx, serviceInfo).AtMostOne()
 
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf(
+			"unable to get load balancer for %s: %w", service.Name, err)
 	}
 
 	if instance == nil {
@@ -248,9 +250,10 @@ func (l *loadbalancer) EnsureLoadBalancer(
 	err := reconcileLbState(ctx, l.lbs.client, func() (*lbState, error) {
 		// Get the desired state from Kubernetes
 		sm := serverMapper{client: l.lbs.client}
-		servers, err := sm.mapNodes(ctx, nodes).all()
+		servers, err := sm.mapNodes(ctx, nodes).All()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf(
+				"unable to get load balancer for %s: %w", service.Name, err)
 		}
 
 		return desiredLbState(serviceInfo, nodes, servers)
@@ -307,9 +310,10 @@ func (l *loadbalancer) UpdateLoadBalancer(
 	return reconcileLbState(ctx, l.lbs.client, func() (*lbState, error) {
 		// Get the desired state from Kubernetes
 		sm := serverMapper{client: l.lbs.client}
-		servers, err := sm.mapNodes(ctx, nodes).all()
+		servers, err := sm.mapNodes(ctx, nodes).All()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf(
+				"unable to get load balancer for %s: %w", service.Name, err)
 		}
 
 		return desiredLbState(serviceInfo, nodes, servers)
