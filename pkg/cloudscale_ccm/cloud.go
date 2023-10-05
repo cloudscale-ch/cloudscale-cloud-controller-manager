@@ -11,13 +11,14 @@ import (
 
 	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v3"
 	"golang.org/x/oauth2"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	cloudprovider "k8s.io/cloud-provider"
 )
 
 const (
-	// Under no circumstances can this string change. It is for eterentiy.
+	// Under no circumstances can this string change. It is for eternity.
 	ProviderName   = "cloudscale"
 	AccessToken    = "CLOUDSCALE_ACCESS_TOKEN"
 	ApiUrl         = "CLOUDSCALE_API_URL"
@@ -69,6 +70,9 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 		instances: &instances{
 			srv: serverMapper{client: client},
 		},
+		loadbalancer: &loadbalancer{
+			lbs: lbMapper{client: client},
+		},
 	}, nil
 }
 
@@ -101,8 +105,8 @@ func (c *cloud) Initialize(
 	clientBuilder cloudprovider.ControllerClientBuilder,
 	stop <-chan struct{}) {
 
-	// This cannot be configured earlier, even though it seems better suitated
-	// over up newCloudscaleProvider.
+	// This cannot be configured earlier, even though it seems better situated
+	// in newCloudscaleClient
 	c.loadbalancer.k8s = kubernetes.NewForConfigOrDie(
 		clientBuilder.ConfigOrDie("cloudscale-cloud-controller-manager"))
 }

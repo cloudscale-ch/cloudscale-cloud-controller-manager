@@ -9,7 +9,12 @@ lint:
 	staticcheck ./...
 
 test:
-	go test -race -coverpkg=./pkg/cloudscale_ccm -coverprofile cover.out ./pkg/cloudscale_ccm -v
+	go test -race -v \
+		-coverpkg=./pkg/cloudscale_ccm,./pkg/internal/actions,./pkg/internal/compare \
+		-coverprofile cover.out \
+			./pkg/cloudscale_ccm \
+			./pkg/internal/actions \
+			./pkg/internal/compare
 
 integration:
 	K8TEST_PATH=${PWD}/k8test go test -count=1 -tags=integration ./pkg/internal/integration -v

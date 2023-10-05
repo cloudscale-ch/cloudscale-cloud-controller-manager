@@ -13,6 +13,12 @@ func TestError(t *testing.T) {
 	v, err := lim.one()
 	assert.Error(t, err)
 	assert.Nil(t, v)
+
+	_, err = lim.all()
+	assert.Error(t, err)
+
+	err = lim.none()
+	assert.Error(t, err)
 }
 
 func TestFoundOne(t *testing.T) {
@@ -63,4 +69,12 @@ func TestNone(t *testing.T) {
 func TestNoneNotEmpty(t *testing.T) {
 	lim := newLimiter[string](nil, "foo")
 	assert.Error(t, lim.none())
+}
+
+func TestAll(t *testing.T) {
+	lim := newLimiter[string](nil, "foo", "bar")
+
+	v, err := lim.all()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"foo", "bar"}, v)
 }

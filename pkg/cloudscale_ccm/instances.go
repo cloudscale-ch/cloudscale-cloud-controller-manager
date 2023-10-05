@@ -24,7 +24,7 @@ func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 	server, err := i.srv.findByNode(ctx, node).atMostOne()
 
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("unable to find node %s: %w", node.Name, err)
 	}
 
 	if server == nil {
@@ -53,7 +53,7 @@ func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (
 	server, err := i.srv.findByNode(ctx, node).one()
 
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("unable to find node %s: %w", node.Name, err)
 	}
 
 	klog.InfoS(
@@ -77,7 +77,7 @@ func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (
 	server, err := i.srv.findByNode(ctx, node).one()
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to find node %s: %w", node.Name, err)
 	}
 
 	id, err := uuid.Parse(server.UUID)

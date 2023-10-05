@@ -12,7 +12,6 @@ require (
 )
 
 require (
-	github.com/cloudscale-ch/cloudscale-go-sdk v1.11.0
 	github.com/cloudscale-ch/cloudscale-go-sdk/v3 v3.0.0
 	github.com/google/uuid v1.3.0
 	github.com/stretchr/testify v1.8.3

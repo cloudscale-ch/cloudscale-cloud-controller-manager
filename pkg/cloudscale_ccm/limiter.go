@@ -16,6 +16,14 @@ func newLimiter[T any](err error, elements ...T) *limiter[T] {
 	}
 }
 
+// all returns the full set of answers
+func (t *limiter[T]) all() ([]T, error) {
+	if t.Error != nil {
+		return nil, t.Error
+	}
+	return t.elements, nil
+}
+
 // one returns exactly one item, or an error.
 func (t *limiter[T]) one() (*T, error) {
 	if t.Error != nil {

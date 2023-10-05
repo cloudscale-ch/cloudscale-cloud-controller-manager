@@ -47,6 +47,27 @@ func (s *serverMapper) findByNode(
 	return s.findByName(ctx, node.Name)
 }
 
+// mapNodes returns a server for each given node. If a 1:1 mapping across all
+// given nodes can be established, an error is returned.
+func (s *serverMapper) mapNodes(
+	ctx context.Context,
+	nodes []*v1.Node,
+) *limiter[cloudscale.Server] {
+	servers := make([]cloudscale.Server, 0, len(nodes))
+
+	for _, node := range nodes {
+		server, err := s.findByNode(ctx, node).one()
+
+		if err != nil {
+			return newLimiter[cloudscale.Server](err)
+		}
+
+		servers = append(servers, *server)
+	}
+
+	return newLimiter[cloudscale.Server](nil, servers...)
+}
+
 // getByProviderID tries to access the server by provider ID (UUID)
 func (s *serverMapper) getByProviderID(
 	ctx context.Context,

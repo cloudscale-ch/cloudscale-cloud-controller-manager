@@ -3,12 +3,17 @@ linters:
   enable:
     - errcheck
     - exportloopref
+    - gocritic
+    - gofmt
     - gosimple
     - govet
     - ineffassign
     - lll
+    - makezero
     - staticcheck
+    - unparam
     - unused
+    - wrapcheck
 
 linters-settings:
   lll:
