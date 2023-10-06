@@ -62,9 +62,9 @@ const (
 
 	// LoadBalancerPoolProtocol defines the protocol for all the pools of the
 	// service. We are technically able to have different protocols for
-	// different ports in a service, but as our other options are currently
-	// `PROXY` and `PROXYV2`, we go with Kubernetes's recommendation to apply
-	// these protocols to all incoming connections the same way:
+	// different ports in a service, but as our options apart from `tcp` are
+	// currently `proxy` and `proxyv2`, we go with Kubernetes's recommendation
+	// to apply these protocols to all incoming connections the same way:
 	//
 	// https://kubernetes.io/docs/reference/networking/service-protocols/#protocol-proxy-special
 	//
