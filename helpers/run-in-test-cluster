@@ -17,7 +17,6 @@ function ensure-k8test() {
   if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
     mkdir -p ~/.ssh/ && touch ~/.ssh/known_hosts
     git clone https://github.com/cloudscale-ch/k8test
-    git -C k8test checkout denis/private-network
     python3 -m venv k8test/venv
     source k8test/venv/bin/activate 
     pip install poetry
