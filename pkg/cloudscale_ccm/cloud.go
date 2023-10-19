@@ -23,7 +23,7 @@ const (
 	AccessToken    = "CLOUDSCALE_ACCESS_TOKEN"
 	ApiUrl         = "CLOUDSCALE_API_URL"
 	ApiTimeout     = "CLOUDSCALE_API_TIMEOUT"
-	DefaultTimeout = time.Duration(15) * time.Second
+	DefaultTimeout = time.Duration(20) * time.Second
 )
 
 // cloud implements cloudprovider.Interface

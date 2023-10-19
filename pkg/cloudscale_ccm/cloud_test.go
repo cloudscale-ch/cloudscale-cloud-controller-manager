@@ -45,7 +45,7 @@ func TestNewCloudscaleProviderWithBadConfig(t *testing.T) {
 
 func TestDefaultTimeout(t *testing.T) {
 	timeout := apiTimeout()
-	assert.Equal(t, timeout, 15*time.Second)
+	assert.Equal(t, timeout, 20*time.Second)
 }
 
 func TestCustomTimeout(t *testing.T) {
