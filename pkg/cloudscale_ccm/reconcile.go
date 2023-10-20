@@ -366,7 +366,7 @@ func nextLbActions(
 
 	if desired.lb.Zone.Slug != actual.lb.Zone.Slug {
 		return nil, fmt.Errorf(
-			"zone for %s changed, please configure the previous zone"+
+			"zone for %s changed, please configure the previous zone "+
 				"or contact support",
 			actual.lb.HREF,
 		)
