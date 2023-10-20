@@ -6,6 +6,7 @@
 set -euo pipefail
 
 export ANSIBLE_CONFIG="$PWD"/k8test/ansible.cfg
+export KUBERNETES="${KUBERNETES-latest}"
 
 # Prepares k8test with an existing virtual env, or a newly created on
 function ensure-k8test() {
@@ -71,7 +72,8 @@ function ensure-inventory() {
       -e ssh_key=k8test/cluster/ssh.pub \
       -e control_count=2 \
       -e worker_count=2 \
-      -e kubelet_extra_args='--cloud-provider=external'
+      -e kubelet_extra_args='--cloud-provider=external' \
+      -e kubernetes="${KUBERNETES}"
 
     # Those won't really change between runs, so update them during install
     k8test/playbooks/update-secrets.yml \
