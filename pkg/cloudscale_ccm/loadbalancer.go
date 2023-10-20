@@ -161,6 +161,7 @@ const (
 
 type loadbalancer struct {
 	lbs lbMapper
+	srv serverMapper
 	k8s kubernetes.Interface
 }
 
@@ -249,8 +250,7 @@ func (l *loadbalancer) EnsureLoadBalancer(
 	// Reconcile
 	err := reconcileLbState(ctx, l.lbs.client, func() (*lbState, error) {
 		// Get the desired state from Kubernetes
-		sm := serverMapper{client: l.lbs.client}
-		servers, err := sm.mapNodes(ctx, nodes).All()
+		servers, err := l.srv.mapNodes(ctx, nodes).All()
 		if err != nil {
 			return nil, fmt.Errorf(
 				"unable to get load balancer for %s: %w", service.Name, err)
@@ -309,8 +309,7 @@ func (l *loadbalancer) UpdateLoadBalancer(
 	// Reconcile
 	return reconcileLbState(ctx, l.lbs.client, func() (*lbState, error) {
 		// Get the desired state from Kubernetes
-		sm := serverMapper{client: l.lbs.client}
-		servers, err := sm.mapNodes(ctx, nodes).All()
+		servers, err := l.srv.mapNodes(ctx, nodes).All()
 		if err != nil {
 			return nil, fmt.Errorf(
 				"unable to get load balancer for %s: %w", service.Name, err)

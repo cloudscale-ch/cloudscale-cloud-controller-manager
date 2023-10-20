@@ -72,6 +72,7 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 		},
 		loadbalancer: &loadbalancer{
 			lbs: lbMapper{client: client},
+			srv: serverMapper{client: client},
 		},
 	}, nil
 }
