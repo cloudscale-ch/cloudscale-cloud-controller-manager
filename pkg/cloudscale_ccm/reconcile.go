@@ -25,13 +25,11 @@ type lbState struct {
 	pools   []*cloudscale.LoadBalancerPool
 	members map[*cloudscale.LoadBalancerPool][]cloudscale.
 		LoadBalancerPoolMember
-
-	// Though not currently used that way, monitors and listeners are not
-	// necessarily bound to any given pool. Monitors and listeners not bound
-	// to a pool will be added to the `monitors[nil]` / `listeners[nil]` list
-	// in the future.
 	monitors map[*cloudscale.LoadBalancerPool][]cloudscale.
 			LoadBalancerHealthMonitor
+
+	// Though not currently used that way, listeners are not
+	// necessarily bound to any given pool.
 	listeners map[*cloudscale.LoadBalancerPool][]cloudscale.
 			LoadBalancerListener
 }
