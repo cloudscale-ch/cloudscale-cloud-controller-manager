@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/kubeutil"
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v3"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -275,13 +276,14 @@ func (l *loadbalancer) EnsureLoadBalancer(
 	// At creation annotate the service with necessary data
 	version := serviceInfo.annotation(LoadBalancerConfigVersion)
 
-	err = serviceInfo.annotateService(ctx, l.k8s,
+	err = kubeutil.AnnotateService(ctx, l.k8s, serviceInfo.Service,
 		LoadBalancerUUID, actual.lb.UUID,
 		LoadBalancerConfigVersion, version,
 		LoadBalancerZone, actual.lb.Zone.Slug,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+			"unable to annotate service %s: %w", service.Name, err)
 	}
 
 	return loadBalancerStatus(actual.lb), nil

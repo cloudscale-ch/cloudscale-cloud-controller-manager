@@ -1,17 +1,13 @@
 package cloudscale_ccm
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
+
 	"k8s.io/klog/v2"
 )
 
@@ -178,85 +174,4 @@ func (s serviceInfo) annotationOrElse(key string, fn func() string) string {
 // default value if the key does not exist.
 func (s serviceInfo) annotationOrDefault(key string, value string) string {
 	return s.annotationOrElse(key, func() string { return value })
-}
-
-// annotateService takes a list of key/value pairs and applies them as
-// annotations using JSON patch (https://jsonpatch.com/).
-func (s serviceInfo) annotateService(
-	ctx context.Context,
-	k8s kubernetes.Interface,
-	kv ...string,
-) error {
-	if len(kv) == 0 {
-		return nil
-	}
-
-	if len(kv)%2 != 0 {
-		return errors.New("expected an even number of arguments (key, value)")
-	}
-
-	if k8s == nil {
-		return errors.New("no valid kubernetes client given")
-	}
-
-	operations := make([]map[string]any, 0, len(kv)/2)
-
-	if s.Service.Annotations == nil {
-		operations = append(operations,
-			map[string]any{
-				"op":    "add",
-				"path":  "/metadata/annotations",
-				"value": map[string]any{},
-			},
-		)
-	}
-
-	for ix := range kv {
-		if ix%2 != 0 {
-			continue
-		}
-
-		k := kv[ix]
-		v := kv[ix+1]
-
-		if s.Service.Annotations != nil && s.Service.Annotations[k] == v {
-			continue
-		}
-
-		// https://www.rfc-editor.org/rfc/rfc6901#section-3
-		k = strings.ReplaceAll(k, "~", "~0")
-		k = strings.ReplaceAll(k, "/", "~1")
-
-		path := fmt.Sprintf("/metadata/annotations/%s", k)
-
-		operations = append(operations, map[string]any{
-			"op":    "add",
-			"path":  path,
-			"value": v,
-		})
-	}
-
-	if len(operations) == 0 {
-		return nil
-	}
-
-	patch, err := json.Marshal(&operations)
-	if err != nil {
-		return fmt.Errorf("failed to encode patch operations: %w", err)
-	}
-
-	_, err = k8s.CoreV1().Services(s.Service.Namespace).Patch(
-		ctx,
-		s.Service.Name,
-		types.JSONPatchType,
-		patch,
-		metav1.PatchOptions{},
-	)
-
-	if err != nil {
-		return fmt.Errorf(
-			"failed to apply patch to %s: %w", s.Service.Name, err)
-	}
-
-	return nil
 }
