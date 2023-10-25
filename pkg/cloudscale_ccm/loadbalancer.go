@@ -22,13 +22,13 @@ const (
 	// In all other cases, this value is set by the CCM after creating the
 	// load balancer, to ensure that we track it with a proper ID and not
 	// a name that might change without our knowledge.
-	LoadBalancerUUID = "service.beta.kubernetes.io/cloudscale-loadbalancer-uuid"
+	LoadBalancerUUID = "k8s.cloudscale.ch/loadbalancer-uuid"
 
 	// LoadBalancerConfigVersion is set by the CCM when it first handles a
 	// service. It exists to allow future CCM changes and should not be
 	// tampered with. Once set, it is not changed, unless there is an upgrade
 	// path applied by the CCM.
-	LoadBalancerConfigVersion = "service.beta.kubernetes.io/cloudscale-loadbalancer-config-version"
+	LoadBalancerConfigVersion = "k8s.cloudscale.ch/loadbalancer-config-version"
 
 	// LoadBalancerName names the loadbalancer on creation, and renames it
 	// later. Note that if the LoadBalancerUUID annotation exists, it takes
@@ -36,19 +36,19 @@ const (
 	//
 	// This annotation can be changed without downtime on an esablished
 	// service, but it is not recommended.
-	LoadBalancerName = "service.beta.kubernetes.io/cloudscale-loadbalancer-name"
+	LoadBalancerName = "k8s.cloudscale.ch/loadbalancer-name"
 
 	// LoadBalancerFlavor denotes the flavor used by the balancer. There is
 	// currently only one flavor, lb-standard.
 	//
 	// This can currently not be changed and will cause an error if attempted.
-	LoadBalancerFlavor = "service.beta.kubernetes.io/cloudscale-loadbalancer-flavor"
+	LoadBalancerFlavor = "k8s.cloudscale.ch/loadbalancer-flavor"
 
 	// LoadBalancerZone defines the zone in which the load balancer is running.
 	// This defaults to the zone of the Nodes (if there is only one).
 	//
 	// This can not be changed once the service is created.
-	LoadBalancerZone = "service.beta.kubernetes.io/cloudscale-loadbalancer-zone"
+	LoadBalancerZone = "k8s.cloudscale.ch/loadbalancer-zone"
 
 	// LoadBalancerPoolAlgorithm defines the load balancing algorithm used
 	// by the loadbalancer. See the API documentation for more information:
@@ -59,7 +59,7 @@ const (
 	//
 	// Changing this algorithm will on an established service causes downtime,
 	// as all pools have to be recreated.
-	LoadBalancerPoolAlgorithm = "service.beta.kubernetes.io/cloudscale-loadbalancer-pool-algorithm"
+	LoadBalancerPoolAlgorithm = "k8s.cloudscale.ch/loadbalancer-pool-algorithm"
 
 	// LoadBalancerPoolProtocol defines the protocol for all the pools of the
 	// service. We are technically able to have different protocols for
@@ -78,32 +78,32 @@ const (
 	//
 	// Changing the pool protocol on an established service causes downtime,
 	// as all pools have to be recreated.
-	LoadBalancerPoolProtocol = "service.beta.kubernetes.io/cloudscale-loadbalancer-pool-protocol"
+	LoadBalancerPoolProtocol = "k8s.cloudscale.ch/loadbalancer-pool-protocol"
 
 	// LoadBalancerHealthMonitorDelayS is the delay between two successive
 	// checks, in seconds. Defaults to 2.
 	//
 	// Changing this annotation on an active service may lead to new
 	// connections timing out while the monitor is updated.
-	LoadBalancerHealthMonitorDelayS = "service.beta.kubernetes.io/cloudscale-loadbalancer-health-monitor-delay-s"
+	LoadBalancerHealthMonitorDelayS = "k8s.cloudscale.ch/loadbalancer-health-monitor-delay-s"
 
 	// LoadBalancerHealthMonitorTimeoutS is the maximum time allowed for an
 	// individual check, in seconds. Defaults to 1.
 	//
 	// Changing this annotation on an active service may lead to new
 	// connections timing out while the monitor is updated.
-	LoadBalancerHealthMonitorTimeoutS = "service.beta.kubernetes.io/cloudscale-loadbalancer-health-monitor-timeout-s"
+	LoadBalancerHealthMonitorTimeoutS = "k8s.cloudscale.ch/loadbalancer-health-monitor-timeout-s"
 
 	// LoadBalancerHealthMonitorDownThreshold is the number of the checks that
 	// need to succeed before a pool member is considered up. Defaults to 2.
-	LoadBalancerHealthMonitorUpThreshold = "service.beta.kubernetes.io/cloudscale-loadbalancer-health-monitor-up-threshold"
+	LoadBalancerHealthMonitorUpThreshold = "k8s.cloudscale.ch/loadbalancer-health-monitor-up-threshold"
 
 	// LoadBalancerHealthMonitorDownThreshold is the number of the checks that
 	// need to fail before a pool member is considered down. Defaults to 3.
 	//
 	// Changing this annotation on an active service may lead to new
 	// connections timing out while the monitor is updated.
-	LoadBalancerHealthMonitorDownThreshold = "service.beta.kubernetes.io/cloudscale-loadbalancer-health-monitor-down-threshold"
+	LoadBalancerHealthMonitorDownThreshold = "k8s.cloudscale.ch/loadbalancer-health-monitor-down-threshold"
 
 	// LoadBalancerHealthMonitorType defines the approach the monitor takes.
 	// (ping, tcp, http, https, tls-hello).
@@ -112,7 +112,7 @@ const (
 	//
 	// Changing this annotation on an active service may lead to new
 	// connections timing out while the monitor is recreated.
-	LoadBalancerHealthMonitorType = "service.beta.kubernetes.io/cloudscale-loadbalancer-health-monitor-type"
+	LoadBalancerHealthMonitorType = "k8s.cloudscale.ch/loadbalancer-health-monitor-type"
 
 	// LoadBalancerHealthMonitorHTTP configures details about the HTTP check.
 	//
@@ -120,7 +120,7 @@ const (
 	//
 	// Changing this annotation on an active service may lead to new
 	// connections timing out while the monitor is updated.
-	LoadBalancerHealthMonitorHTTP = "service.beta.kubernetes.io/cloudscale-loadbalancer-health-monitor-http"
+	LoadBalancerHealthMonitorHTTP = "k8s.cloudscale.ch/loadbalancer-health-monitor-http"
 
 	// LoadBalancerListenerProtocol defines the protocol used by the listening
 	// port on the loadbalancer. Currently, only tcp is supported.
@@ -129,7 +129,7 @@ const (
 	//
 	// Changing this annotation on an established service may cause downtime
 	// as the listeners are recreated.
-	LoadBalancerListenerProtocol = "service.beta.kubernetes.io/cloudscale-loadbalancer-listener-protocol"
+	LoadBalancerListenerProtocol = "k8s.cloudscale.ch/loadbalancer-listener-protocol"
 
 	// LoadBalancerListenerAllowedCIDRs is a JSON list of IP addresses that
 	// should be allowed to access the load balancer. For example:
@@ -138,26 +138,26 @@ const (
 	// * `["1.1.1.1", "8.8.8.8"]` only the given addresses are allowed.
 	//
 	// Changing this annotation on an established service is considered safe.
-	LoadBalancerListenerAllowedCIDRs = "service.beta.kubernetes.io/cloudscale-loadbalancer-listener-allowed-cidrs"
+	LoadBalancerListenerAllowedCIDRs = "k8s.cloudscale.ch/loadbalancer-listener-allowed-cidrs"
 
 	// LoadBalancerListenerTimeoutClientDataMS denotes the milliseconds until
 	// inactive client connections are dropped.
 	//
 	// Changing this annotation on an established service is considered safe.
-	LoadBalancerListenerTimeoutClientDataMS = "service.beta.kubernetes.io/cloudscale-loadbalancer-timeout-client-data-ms"
+	LoadBalancerListenerTimeoutClientDataMS = "k8s.cloudscale.ch/loadbalancer-timeout-client-data-ms"
 
 	// LoadBalancerListenerTimeoutMemberConnectMS denotes the milliseconds
 	// it should maximally take to connect to a pool member, before the
 	// attempt is aborted.
 	//
 	// Changing this annotation on an established service is considered safe.
-	LoadBalancerListenerTimeoutMemberConnectMS = "service.beta.kubernetes.io/cloudscale-loadbalancer-timeout-member-connect-ms"
+	LoadBalancerListenerTimeoutMemberConnectMS = "k8s.cloudscale.ch/loadbalancer-timeout-member-connect-ms"
 
 	// LoadBalancerListenerTimeoutMemberDataMS denotes the milliseconds until
 	// an inactive connection to a pool member is dropped.
 	//
 	// Changing this annotation on an established service is considered safe.
-	LoadBalancerListenerTimeoutMemberDataMS = "service.beta.kubernetes.io/cloudscale-loadbalancer-timeout-member-data-ms"
+	LoadBalancerListenerTimeoutMemberDataMS = "k8s.cloudscale.ch/loadbalancer-timeout-member-data-ms"
 )
 
 type loadbalancer struct {
