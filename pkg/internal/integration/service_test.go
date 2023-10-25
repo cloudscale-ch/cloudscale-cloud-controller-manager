@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"io"
 	"net/netip"
 	"strings"
 	"time"
@@ -90,6 +91,41 @@ func (s *IntegrationTestSuite) ExposeDeployment(
 	s.Require().NoError(err)
 }
 
+// CCMLogs returns all the logs of the CCM since the given time.
+func (s *IntegrationTestSuite) CCMLogs(start time.Time) string {
+
+	pods, err := s.k8s.CoreV1().Pods("kube-system").List(
+		context.Background(),
+		metav1.ListOptions{
+			LabelSelector: "k8s-app=cloudscale-cloud-controller-manager",
+		},
+	)
+	s.Require().NoError(err)
+
+	st := metav1.NewTime(start)
+	options := v1.PodLogOptions{
+		SinceTime: &st,
+	}
+
+	output := ""
+	for _, pod := range pods.Items {
+		logs := s.k8s.CoreV1().
+			Pods("kube-system").
+			GetLogs(pod.Name, &options)
+
+		stream, err := logs.Stream(context.Background())
+		s.Require().NoError(err)
+		defer stream.Close()
+
+		bytes, err := io.ReadAll(stream)
+		s.Require().NoError(err)
+
+		output += string(bytes)
+	}
+
+	return output
+}
+
 func (s *IntegrationTestSuite) ServiceNamed(name string) *v1.Service {
 	service, err := s.k8s.CoreV1().Services(s.ns).Get(
 		context.Background(), name, metav1.GetOptions{},
@@ -123,6 +159,9 @@ func (s *IntegrationTestSuite) AwaitServiceReady(
 }
 
 func (s *IntegrationTestSuite) TestServiceEndToEnd() {
+
+	// Note the start for the log
+	start := time.Now()
 
 	// Deploy a TCP server that returns the hostname
 	s.CreateDeployment("hostname", "alpine/socat", 2, 8080, []string{
@@ -163,6 +202,14 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	}
 
 	s.Assert().Len(responses, 2)
+
+	// In this simple case we expect no errors nor warnings
+	lines := s.CCMLogs(start)
+
+	s.Assert().NotContains(lines, "error")
+	s.Assert().NotContains(lines, "Error")
+	s.Assert().NotContains(lines, "warn")
+	s.Assert().NotContains(lines, "Warn")
 }
 
 func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
