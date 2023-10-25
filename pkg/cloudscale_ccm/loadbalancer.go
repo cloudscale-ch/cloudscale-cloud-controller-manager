@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/kubeutil"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v3"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"

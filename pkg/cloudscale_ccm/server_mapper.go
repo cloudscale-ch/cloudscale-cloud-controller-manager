@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/limiter"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v3"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 	v1 "k8s.io/api/core/v1"
 )
 

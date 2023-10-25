@@ -7,7 +7,7 @@ import (
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/actions"
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v3"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 )
@@ -215,7 +215,7 @@ func TestActualState(t *testing.T) {
 		[]cloudscale.LoadBalancerListener{
 			{
 				Name: "tcp/80",
-				Pool: cloudscale.LoadBalancerPoolStub{
+				Pool: &cloudscale.LoadBalancerPoolStub{
 					UUID: "00000000-0000-0000-0000-000000000001",
 				},
 			},

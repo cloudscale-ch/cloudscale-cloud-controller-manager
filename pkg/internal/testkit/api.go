@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v3"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 )
 
 // MockAPIServer is a mock http server that builds on httptest.Server and

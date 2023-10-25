@@ -12,7 +12,7 @@ import (
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/actions"
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/compare"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v3"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -246,12 +246,21 @@ func actualLbState(
 		}
 
 		for _, l := range listeners {
-			if l.Pool.UUID != p.UUID {
+			if l.Pool == nil || l.Pool.UUID != p.UUID {
 				continue
 			}
 
 			s.listeners[&p] = append(s.listeners[&p], l)
 		}
+	}
+
+	// Add free floating listeners (maybe used in the future)
+	for _, l := range listeners {
+		if l.Pool != nil || l.LoadBalancer.UUID != lb.UUID {
+			continue
+		}
+
+		s.listeners[nil] = append(s.listeners[nil], l)
 	}
 
 	return s, nil
