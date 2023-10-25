@@ -553,6 +553,7 @@ func TestNextPoolMemberActions(t *testing.T) {
 		actions.AwaitLb(lb),
 		actions.DeleteResource("actual"),
 		actions.Sleep(500 * time.Millisecond),
+		actions.Sleep(5000 * time.Millisecond),
 		actions.CreatePoolMember("1", &desired.members[pool][0]),
 		actions.Refetch(),
 	})

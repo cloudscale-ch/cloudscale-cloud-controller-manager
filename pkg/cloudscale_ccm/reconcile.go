@@ -429,6 +429,13 @@ func nextLbActions(
 			delete(member.HREF)
 		}
 
+		// Pool member deletes take a moment to propagate. Similar members
+		// to be created could clash with members being deleted. Wait for a bit
+		// to lower the chance of that happening.
+		if len(msToDelete) > 0 && len(msToCreate) > 0 {
+			next = append(next, actions.Sleep(5*time.Second))
+		}
+
 		for _, m := range msToCreate {
 			member := m
 			next = append(next, actions.CreatePoolMember(a.UUID, &member))
@@ -756,6 +763,27 @@ func healthMonitorForPort(
 		}
 	}
 
+	if serviceInfo.Service.Spec.ExternalTrafficPolicy == "Local" {
+		// Users may override the http monitor options in this case, but
+		// if they are not careful, it will lead to timeouts. Overriding
+		// the user would be an option, but this is left in as an escape-hatch
+		// for special configurations that need to use their own HTTP options
+		// with this policy. In most cases, the default should suffice.
+		if http != "{}" {
+			klog.Warning(
+				"not adding /livez monitor required for "+
+					"spec.externalTrafficPolicy=\"Local\": %s set",
+				LoadBalancerHealthMonitorHTTP,
+			)
+		} else {
+			monitor.Type = "http"
+			monitor.HTTP = &cloudscale.LoadBalancerHealthMonitorHTTP{
+				UrlPath: "/livez",
+				Version: "1.0",
+			}
+		}
+	}
+
 	return &monitor, nil
 }
 
@@ -778,23 +806,25 @@ func isEqualHTTPOption(
 		return true
 	}
 
-	if !slices.Equal(a.ExpectedCodes, b.ExpectedCodes) {
+	if a.ExpectedCodes != nil {
+		if !slices.Equal(a.ExpectedCodes, b.ExpectedCodes) {
+			return false
+		}
+	}
+
+	if a.Host != nil && a.Host != b.Host {
 		return false
 	}
 
-	if a.Host != b.Host {
+	if a.Method != "" && a.Method != b.Method {
 		return false
 	}
 
-	if a.Method != b.Method {
+	if a.UrlPath != "" && a.UrlPath != b.UrlPath {
 		return false
 	}
 
-	if a.UrlPath != b.UrlPath {
-		return false
-	}
-
-	if a.Version != b.Version {
+	if a.Version != "" && a.Version != b.Version {
 		return false
 	}
 
