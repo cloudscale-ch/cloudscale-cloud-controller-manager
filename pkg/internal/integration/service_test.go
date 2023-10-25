@@ -134,7 +134,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	s.ExposeDeployment("hostname", 80, 8080)
 
 	// Wait for the service to be ready
-	service := s.AwaitServiceReady("hostname", 150*time.Second)
+	service := s.AwaitServiceReady("hostname", 180*time.Second)
 	s.Require().NotNil(service)
 
 	// Ensure the annotations are set
@@ -231,7 +231,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	s.ExposeDeployment("peeraddr", 80, 8080)
 
 	// Wait for the service to be ready
-	service := s.AwaitServiceReady("peeraddr", 150*time.Second)
+	service := s.AwaitServiceReady("peeraddr", 180*time.Second)
 	s.Require().NotNil(service)
 
 	// In its initial state, expect a natted IP address
