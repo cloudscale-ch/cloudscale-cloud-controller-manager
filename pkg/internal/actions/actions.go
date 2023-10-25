@@ -388,34 +388,132 @@ func (a *CreateHealthMonitorAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorHTTP updates a monitor's HTTP options
-type UpdateMonitorHTTPAction struct {
+// UpdateMonitorHTTPMethod updates a monitor's HTTP method
+type UpdateMonitorHTTPMethodAction struct {
 	monitorUUID string
-	http        *cloudscale.LoadBalancerHealthMonitorHTTP
+	method      string
 }
 
-func UpdateMonitorHTTP(
-	monitorUUID string,
-	http *cloudscale.LoadBalancerHealthMonitorHTTP) Action {
-
-	return &UpdateMonitorHTTPAction{monitorUUID: monitorUUID, http: http}
+func UpdateMonitorHTTPMethod(monitorUUID string, method string) Action {
+	return &UpdateMonitorHTTPMethodAction{
+		monitorUUID: monitorUUID,
+		method:      method,
+	}
 }
 
-func (a *UpdateMonitorHTTPAction) Label() string {
-	return fmt.Sprintf("update-monitor-http(%s: '%v')", a.monitorUUID, a.http)
+func (a *UpdateMonitorHTTPMethodAction) Label() string {
+	return fmt.Sprintf(
+		"update-monitor-http-method (%s: %s)", a.monitorUUID, a.method)
 }
 
-func (a *UpdateMonitorHTTPAction) Run(
+func (a *UpdateMonitorHTTPMethodAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
 
 	err := client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID,
 		&cloudscale.LoadBalancerHealthMonitorRequest{
 			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTPRequest{
-				ExpectedCodes: a.http.ExpectedCodes,
-				Method:        a.http.Method,
-				UrlPath:       a.http.UrlPath,
-				Version:       a.http.Version,
-				Host:          a.http.Host,
+				Method: a.method,
+			},
+		},
+	)
+
+	return ProceedOnSuccess(err)
+}
+
+// UpdateMonitorHTTPPath updates a monitor's HTTP path
+type UpdateMonitorHTTPPathAction struct {
+	monitorUUID string
+	path        string
+}
+
+func UpdateMonitorHTTPPath(monitorUUID string, path string) Action {
+	return &UpdateMonitorHTTPPathAction{
+		monitorUUID: monitorUUID,
+		path:        path,
+	}
+}
+
+func (a *UpdateMonitorHTTPPathAction) Label() string {
+	return fmt.Sprintf(
+		"update-monitor-http-path (%s: %s)", a.monitorUUID, a.path)
+}
+
+func (a *UpdateMonitorHTTPPathAction) Run(
+	ctx context.Context, client *cloudscale.Client) (Control, error) {
+
+	err := client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID,
+		&cloudscale.LoadBalancerHealthMonitorRequest{
+			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTPRequest{
+				UrlPath: a.path,
+			},
+		},
+	)
+
+	return ProceedOnSuccess(err)
+}
+
+// UpdateMonitorHTTPHost updates a monitor's HTTP host
+type UpdateMonitorHTTPHostAction struct {
+	monitorUUID string
+	host        *string
+}
+
+func UpdateMonitorHTTPHost(monitorUUID string, host *string) Action {
+	return &UpdateMonitorHTTPHostAction{
+		monitorUUID: monitorUUID,
+		host:        host,
+	}
+}
+
+func (a *UpdateMonitorHTTPHostAction) Label() string {
+	return fmt.Sprintf(
+		"update-monitor-http-host (%s: %v)", a.monitorUUID, a.host)
+}
+
+func (a *UpdateMonitorHTTPHostAction) Run(
+	ctx context.Context, client *cloudscale.Client) (Control, error) {
+
+	err := client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID,
+		&cloudscale.LoadBalancerHealthMonitorRequest{
+			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTPRequest{
+				Host: a.host,
+			},
+		},
+	)
+
+	return ProceedOnSuccess(err)
+}
+
+// UpdateMonitorHTTPExpectedCodes updates a monitor's HTTP expected codes
+type UpdateMonitorHTTPExpectedCodesAction struct {
+	monitorUUID   string
+	expectedCodes []string
+}
+
+func UpdateMonitorHTTPExpectedCodes(
+	monitorUUID string, expectedCodes []string) Action {
+
+	return &UpdateMonitorHTTPExpectedCodesAction{
+		monitorUUID:   monitorUUID,
+		expectedCodes: expectedCodes,
+	}
+}
+
+func (a *UpdateMonitorHTTPExpectedCodesAction) Label() string {
+	return fmt.Sprintf(
+		"update-monitor-http-expected-codes (%s: %s)",
+		a.monitorUUID,
+		a.expectedCodes,
+	)
+}
+
+func (a *UpdateMonitorHTTPExpectedCodesAction) Run(
+	ctx context.Context, client *cloudscale.Client) (Control, error) {
+
+	err := client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID,
+		&cloudscale.LoadBalancerHealthMonitorRequest{
+			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTPRequest{
+				ExpectedCodes: a.expectedCodes,
 			},
 		},
 	)

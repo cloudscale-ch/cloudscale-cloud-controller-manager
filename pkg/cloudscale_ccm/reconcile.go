@@ -315,8 +315,15 @@ func nextLbActions(
 	}
 
 	monitorKey := func(m cloudscale.LoadBalancerHealthMonitor) string {
+		httpVersion := "1.1"
+
+		if m.HTTP != nil && m.HTTP.Version != "" {
+			httpVersion = m.HTTP.Version
+		}
+
 		return fmt.Sprintf(
 			m.Type,
+			httpVersion,
 		)
 	}
 
@@ -538,11 +545,36 @@ func nextLbActions(
 			dm := match[0]
 			am := match[1]
 
-			if !isEqualHTTPOption(dm.HTTP, am.HTTP) {
-				next = append(next, actions.UpdateMonitorHTTP(
-					am.UUID,
-					dm.HTTP,
-				))
+			if dm.HTTP != nil && am.HTTP != nil {
+				if dm.HTTP.Host != am.HTTP.Host {
+					next = append(next, actions.UpdateMonitorHTTPHost(
+						am.UUID,
+						dm.HTTP.Host,
+					))
+				}
+
+				if dm.HTTP.UrlPath != am.HTTP.UrlPath {
+					next = append(next, actions.UpdateMonitorHTTPPath(
+						am.UUID,
+						dm.HTTP.UrlPath,
+					))
+				}
+
+				if dm.HTTP.Method != am.HTTP.Method {
+					next = append(next, actions.UpdateMonitorHTTPMethod(
+						am.UUID,
+						dm.HTTP.Method,
+					))
+				}
+
+				if !slices.Equal(
+					dm.HTTP.ExpectedCodes, am.HTTP.ExpectedCodes) {
+
+					next = append(next, actions.UpdateMonitorHTTPExpectedCodes(
+						am.UUID,
+						dm.HTTP.ExpectedCodes,
+					))
+				}
 			}
 
 			if dm.DelayS != am.DelayS {
@@ -761,9 +793,29 @@ func healthMonitorForPort(
 				err,
 			)
 		}
+
+		// Make sure to fill out defaults for later comparison (the actual
+		// monitor will have these defaults filled out)
+		if monitor.HTTP.Method == "" {
+			monitor.HTTP.Method = "GET"
+		}
+
+		if monitor.HTTP.UrlPath == "" {
+			monitor.HTTP.UrlPath = "/"
+		}
+
+		if len(monitor.HTTP.ExpectedCodes) == 0 {
+			monitor.HTTP.ExpectedCodes = []string{"200"}
+		}
+
+		if monitor.HTTP.Version == "" {
+			monitor.HTTP.Version = "1.1"
+		}
 	}
 
 	if serviceInfo.Service.Spec.ExternalTrafficPolicy == "Local" {
+		monitor.Type = "http"
+
 		// Users may override the http monitor options in this case, but
 		// if they are not careful, it will lead to timeouts. Overriding
 		// the user would be an option, but this is left in as an escape-hatch
@@ -771,15 +823,17 @@ func healthMonitorForPort(
 		// with this policy. In most cases, the default should suffice.
 		if http != "{}" {
 			klog.Warning(
-				"not adding /livez monitor required for "+
-					"spec.externalTrafficPolicy=\"Local\": %s set",
+				"not configuring /livez http options required for",
+				"spec.externalTrafficPolicy=\"Local\", due to annotation",
 				LoadBalancerHealthMonitorHTTP,
 			)
 		} else {
-			monitor.Type = "http"
 			monitor.HTTP = &cloudscale.LoadBalancerHealthMonitorHTTP{
-				UrlPath: "/livez",
-				Version: "1.0",
+				UrlPath:       "/livez",
+				Version:       "1.0",
+				Host:          nil,
+				Method:        "GET",
+				ExpectedCodes: []string{"200"},
 			}
 		}
 	}
@@ -794,41 +848,6 @@ func (l *lbState) poolsByName() map[string]*cloudscale.LoadBalancerPool {
 		pools[p.Name] = p
 	}
 	return pools
-}
-
-// isEqualHTTPOption returns true if the two http options are the same
-func isEqualHTTPOption(
-	a *cloudscale.LoadBalancerHealthMonitorHTTP,
-	b *cloudscale.LoadBalancerHealthMonitorHTTP) bool {
-
-	// Pointer comparison
-	if a == b {
-		return true
-	}
-
-	if a.ExpectedCodes != nil {
-		if !slices.Equal(a.ExpectedCodes, b.ExpectedCodes) {
-			return false
-		}
-	}
-
-	if a.Host != nil && a.Host != b.Host {
-		return false
-	}
-
-	if a.Method != "" && a.Method != b.Method {
-		return false
-	}
-
-	if a.UrlPath != "" && a.UrlPath != b.UrlPath {
-		return false
-	}
-
-	if a.Version != "" && a.Version != b.Version {
-		return false
-	}
-
-	return true
 }
 
 // poolName produces the name of the pool for the given service port (the port

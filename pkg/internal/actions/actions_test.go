@@ -352,7 +352,7 @@ func TestCreateHealthMonitorAction(t *testing.T) {
 	assert.Equal(t, "foo", *sent.HTTP.Host)
 }
 
-func TestUpdateMonitorHTTPAction(t *testing.T) {
+func TestUpdateMonitorHTTPMethod(t *testing.T) {
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/health-monitors"+
@@ -360,16 +360,8 @@ func TestUpdateMonitorHTTPAction(t *testing.T) {
 	server.Start()
 	defer server.Close()
 
-	host := "foo"
-	action := UpdateMonitorHTTP("00000000-0000-0000-0000-000000000000",
-		&cloudscale.LoadBalancerHealthMonitorHTTP{
-			ExpectedCodes: []string{"200"},
-			Method:        "GET",
-			UrlPath:       "/livez",
-			Version:       "1.1",
-			Host:          &host,
-		},
-	)
+	action := UpdateMonitorHTTPMethod(
+		"00000000-0000-0000-0000-000000000000", "HEAD")
 
 	assert.NotEmpty(t, action.Label())
 
@@ -380,11 +372,77 @@ func TestUpdateMonitorHTTPAction(t *testing.T) {
 	var sent cloudscale.LoadBalancerHealthMonitorRequest
 	server.LastSent(&sent)
 
-	assert.Equal(t, []string{"200"}, sent.HTTP.ExpectedCodes)
-	assert.Equal(t, "GET", sent.HTTP.Method)
-	assert.Equal(t, "/livez", sent.HTTP.UrlPath)
-	assert.Equal(t, "1.1", sent.HTTP.Version)
-	assert.Equal(t, "foo", *sent.HTTP.Host)
+	assert.Equal(t, "HEAD", sent.HTTP.Method)
+}
+
+func TestUpdateMonitorHTTPHost(t *testing.T) {
+	server := testkit.NewMockAPIServer()
+	server.On(
+		"/v1/load-balancers/health-monitors"+
+			"/00000000-0000-0000-0000-000000000000", 204, "")
+	server.Start()
+	defer server.Close()
+
+	host := "Foo"
+	action := UpdateMonitorHTTPHost(
+		"00000000-0000-0000-0000-000000000000", &host)
+
+	assert.NotEmpty(t, action.Label())
+
+	v, err := action.Run(context.Background(), server.Client())
+	assert.NoError(t, err)
+	assert.Equal(t, Proceed, v)
+
+	var sent cloudscale.LoadBalancerHealthMonitorRequest
+	server.LastSent(&sent)
+
+	assert.Equal(t, "Foo", *sent.HTTP.Host)
+}
+
+func TestUpdateMonitorHTTPPath(t *testing.T) {
+	server := testkit.NewMockAPIServer()
+	server.On(
+		"/v1/load-balancers/health-monitors"+
+			"/00000000-0000-0000-0000-000000000000", 204, "")
+	server.Start()
+	defer server.Close()
+
+	action := UpdateMonitorHTTPPath(
+		"00000000-0000-0000-0000-000000000000", "/foo")
+
+	assert.NotEmpty(t, action.Label())
+
+	v, err := action.Run(context.Background(), server.Client())
+	assert.NoError(t, err)
+	assert.Equal(t, Proceed, v)
+
+	var sent cloudscale.LoadBalancerHealthMonitorRequest
+	server.LastSent(&sent)
+
+	assert.Equal(t, "/foo", sent.HTTP.UrlPath)
+}
+
+func TestUpdateMonitorHTTPExpectedCodes(t *testing.T) {
+	server := testkit.NewMockAPIServer()
+	server.On(
+		"/v1/load-balancers/health-monitors"+
+			"/00000000-0000-0000-0000-000000000000", 204, "")
+	server.Start()
+	defer server.Close()
+
+	action := UpdateMonitorHTTPExpectedCodes(
+		"00000000-0000-0000-0000-000000000000", []string{"202"})
+
+	assert.NotEmpty(t, action.Label())
+
+	v, err := action.Run(context.Background(), server.Client())
+	assert.NoError(t, err)
+	assert.Equal(t, Proceed, v)
+
+	var sent cloudscale.LoadBalancerHealthMonitorRequest
+	server.LastSent(&sent)
+
+	assert.Equal(t, []string{"202"}, sent.HTTP.ExpectedCodes)
 }
 
 func TestUpdateMonitorNumberAction(t *testing.T) {

@@ -758,7 +758,7 @@ func TestNextMonitorActions(t *testing.T) {
 
 	assertActions(desired, actual, []actions.Action{
 		actions.AwaitLb(lb),
-		actions.UpdateMonitorHTTP("1", desired.monitors[pool][0].HTTP),
+		actions.UpdateMonitorHTTPMethod("1", "HEAD"),
 	})
 
 	// Update monitor numbers
