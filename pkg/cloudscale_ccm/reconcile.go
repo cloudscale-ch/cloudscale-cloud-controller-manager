@@ -76,8 +76,7 @@ func desiredLbState(
 	}
 
 	s := newLbState(&cloudscale.LoadBalancer{
-		Name: serviceInfo.annotation(LoadBalancerName),
-		// TODO add support for specificying VIP addresses explicitly
+		Name:         serviceInfo.annotation(LoadBalancerName),
 		VIPAddresses: []cloudscale.VIPAddress{},
 		Flavor: cloudscale.LoadBalancerFlavorStub{
 			Slug: serviceInfo.annotation(LoadBalancerFlavor),
@@ -124,10 +123,6 @@ func desiredLbState(
 		s.pools = append(s.pools, &pool)
 
 		// For each server and private address, we need to add a pool member
-		//
-		// TODO add support for limiting this to a specific subnet (per default
-		// all private networks are added).
-		// TODO add support for floating IPs.
 		for _, server := range servers {
 			for _, iface := range server.Interfaces {
 
