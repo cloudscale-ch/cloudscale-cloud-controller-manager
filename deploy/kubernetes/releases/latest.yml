@@ -140,6 +140,7 @@ spec:
             - "cloudscale-cloud-controller-manager"
             - "--allow-untagged-cloud"
             - "--v=3"
+            - "--concurrent-service-syncs=2"
           env:
             - name: CLOUDSCALE_API_URL
               value: https://api.cloudscale.ch/
