@@ -164,6 +164,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	start := time.Now()
 
 	// Deploy a TCP server that returns the hostname
+	s.T().Log("Creating hostname deployment")
 	s.CreateDeployment("hostname", "alpine/socat", 2, 8080, []string{
 		`TCP-LISTEN:8080,fork`,
 		`SYSTEM:'echo $HOSTNAME'`,
@@ -173,6 +174,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	s.ExposeDeployment("hostname", 80, 8080)
 
 	// Wait for the service to be ready
+	s.T().Log("Waiting for hostname service to be ready")
 	service := s.AwaitServiceReady("hostname", 180*time.Second)
 	s.Require().NotNil(service)
 
@@ -189,6 +191,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	addr := service.Status.LoadBalancer.Ingress[0].IP
 
 	// Ensure that we get responses from two different pods (round-robin)
+	s.T().Log("Verifying hostname service responses")
 	responses := make(map[string]int)
 	for i := 0; i < 100; i++ {
 		output, err := testkit.TCPRead(addr, 80)
@@ -204,6 +207,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	s.Assert().Len(responses, 2)
 
 	// In this simple case we expect no errors nor warnings
+	s.T().Log("Checking log output for errors/warnings")
 	lines := s.CCMLogs(start)
 
 	s.Assert().NotContains(lines, "error")
@@ -224,6 +228,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	// Deploy a TCP server that returns the remote IP address. Only use a
 	// single instance as we want to check that the routing works right with
 	// all policies.
+	s.T().Log("Creating peeraddr deployment")
 	s.CreateDeployment("peeraddr", "alpine/socat", 1, 8080, []string{
 		`TCP-LISTEN:8080,fork`,
 		`SYSTEM:'echo $SOCAT_PEERADDR'`,
@@ -278,6 +283,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	s.ExposeDeployment("peeraddr", 80, 8080)
 
 	// Wait for the service to be ready
+	s.T().Log("Waiting for peeraddr service to be ready")
 	service := s.AwaitServiceReady("peeraddr", 180*time.Second)
 	s.Require().NotNil(service)
 
@@ -288,6 +294,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	assertFastResponses(addr, &cluster_policy_prefix)
 
 	// Configure the service to use the local traffic policy
+	s.T().Log("Switching peeraddr service to 'Local' traffic policy")
 	err := kubeutil.PatchServiceExternalTrafficPolicy(
 		context.Background(),
 		s.k8s,
