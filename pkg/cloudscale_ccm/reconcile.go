@@ -440,9 +440,6 @@ func nextLbActions(
 			delete(member.HREF)
 		}
 
-		// Pool member deletes take a moment to propagate. Similar members
-		// to be created could clash with members being deleted. Wait for a bit
-		// to lower the chance of that happening.
 		if len(msToDelete) > 0 && len(msToCreate) > 0 {
 			next = append(next, actions.Sleep(5*time.Second))
 		}
@@ -464,6 +461,10 @@ func nextLbActions(
 			delete(listener.HREF)
 		}
 
+		if len(lsToDelete) > 0 && len(lsToCreate) > 0 {
+			next = append(next, actions.Sleep(5*time.Second))
+		}
+
 		for _, l := range lsToCreate {
 			listener := l
 			next = append(next, actions.CreateListener(a.UUID, &listener))
@@ -479,6 +480,10 @@ func nextLbActions(
 		for _, m := range monToDelete {
 			mon := m
 			delete(mon.HREF)
+		}
+
+		if len(monToDelete) > 0 && len(monToCreate) > 0 {
+			next = append(next, actions.Sleep(5*time.Second))
 		}
 
 		for _, m := range monToCreate {

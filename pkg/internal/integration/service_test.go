@@ -296,7 +296,26 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	)
 	s.Require().NoError(err)
 
+	service = s.AwaitServiceReady("peeraddr", 1*time.Second)
+	s.Require().NotNil(service)
+
 	// Now expect to see an IP address from the node's private network
 	assertPrefix(addr, &local_policy_prefix)
 	assertFastResponses(addr, &local_policy_prefix)
+
+	// Go back to the Cluster policy
+	s.T().Log("Switching peeraddr service back to 'Cluster' traffic policy")
+	err = kubeutil.PatchServiceExternalTrafficPolicy(
+		context.Background(),
+		s.k8s,
+		service,
+		v1.ServiceExternalTrafficPolicyTypeCluster,
+	)
+	s.Require().NoError(err)
+
+	service = s.AwaitServiceReady("peeraddr", 1*time.Second)
+	s.Require().NotNil(service)
+
+	assertPrefix(addr, &cluster_policy_prefix)
+	assertFastResponses(addr, &cluster_policy_prefix)
 }

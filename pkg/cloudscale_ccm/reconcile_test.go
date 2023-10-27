@@ -620,6 +620,7 @@ func TestNextListenerActions(t *testing.T) {
 		actions.AwaitLb(lb),
 		actions.DeleteResource("80"),
 		actions.Sleep(500 * time.Millisecond),
+		actions.Sleep(5000 * time.Millisecond),
 		actions.CreateListener("1", &desired.listeners[pool][0]),
 		actions.Refetch(),
 	})
@@ -724,6 +725,7 @@ func TestNextMonitorActions(t *testing.T) {
 		actions.AwaitLb(lb),
 		actions.DeleteResource("tcp"),
 		actions.Sleep(500 * time.Millisecond),
+		actions.Sleep(5000 * time.Millisecond),
 		actions.CreateHealthMonitor("1", &desired.monitors[pool][0]),
 		actions.Refetch(),
 	})
