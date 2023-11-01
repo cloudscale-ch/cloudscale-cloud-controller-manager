@@ -3,19 +3,21 @@ package testkit
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 )
 
 // MockAPIServer is a mock http server that builds on httptest.Server and
 // http.ServeMux and provides methods to easily return mocked cloudscale API
 // responses.
 type MockAPIServer struct {
-	mux    *http.ServeMux
-	server *httptest.Server
+	mux      *http.ServeMux
+	server   *httptest.Server
+	lastsent []byte
 }
 
 func NewMockAPIServer() *MockAPIServer {
@@ -25,7 +27,7 @@ func NewMockAPIServer() *MockAPIServer {
 	}
 }
 
-// On matches the given patter and returns a status and the given data. The
+// On matches the given pattern and returns a status and the given data. The
 // data can be a string or anything that go can marshal into a JSON.
 //
 // The servrer adds a default route that respods with an empty JSON object
@@ -42,11 +44,16 @@ func (m *MockAPIServer) On(pattern string, status int, data any) {
 	m.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(status)
 
+		if status == 404 {
+			fmt.Println("Not handled: {}", r.URL)
+		}
+
 		var (
 			body []byte
 			err  error
 		)
 
+		// Turn response data into a JSON
 		switch v := data.(type) {
 		case string:
 			body = []byte(v)
@@ -57,9 +64,22 @@ func (m *MockAPIServer) On(pattern string, status int, data any) {
 			}
 		}
 
-		_, err = w.Write(body)
-		if err != nil {
-			panic(fmt.Sprintf("failed to write body for %s: %s", pattern, err))
+		// Write response data
+		if len(body) > 0 {
+			_, err = w.Write(body)
+			if err != nil {
+				panic(fmt.Sprintf(
+					"failed to write body for %s: %s", pattern, err))
+			}
+		}
+
+		// Capture JSON that was sent for PUT/POST
+		if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" {
+			data, err := io.ReadAll(r.Body)
+			if err != nil {
+				panic(fmt.Sprintf("failed read request %s: %s", pattern, err))
+			}
+			m.lastsent = data
 		}
 	})
 }
@@ -76,6 +96,18 @@ func (m *MockAPIServer) WithServers(servers []cloudscale.Server) {
 	}
 }
 
+// WithLoadBalancers ensures that the /v1/loadbalancers endpoints respond with
+// the given loadbalancer objects. In addition to /v1/loadbalancers, this also
+// implements /v1/loadbalancers/<uuid> for any loadbalancer with a UUID.
+func (m *MockAPIServer) WithLoadBalancers(lbs []cloudscale.LoadBalancer) {
+	m.On("/v1/load-balancers", 200, lbs)
+	for _, lb := range lbs {
+		if lb.UUID != "" {
+			m.On(fmt.Sprintf("/v1/load-balancers/%s", lb.UUID), 200, lb)
+		}
+	}
+}
+
 // Client returns a cloudscale client pointing at the mock API server.
 func (m *MockAPIServer) Client() *cloudscale.Client {
 	if m.server == nil {
@@ -87,6 +119,14 @@ func (m *MockAPIServer) Client() *cloudscale.Client {
 	client.AuthToken = ""
 
 	return client
+}
+
+// LastSent unmarshals the JSON last sent to the API server via POST/PUT/PATCH.
+func (m *MockAPIServer) LastSent(v any) {
+	err := json.Unmarshal(m.lastsent, v)
+	if err != nil {
+		panic(fmt.Sprintf("failed to unmarshal: %s", m.lastsent))
+	}
 }
 
 // Start runs the server in the background, until it is stopped/closed.

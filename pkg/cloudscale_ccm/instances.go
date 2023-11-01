@@ -21,10 +21,10 @@ type instances struct {
 func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 	bool, error) {
 
-	server, err := i.srv.findByNode(ctx, node).atMostOne()
+	server, err := i.srv.findByNode(ctx, node).AtMostOne()
 
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("unable to find node %s: %w", node.Name, err)
 	}
 
 	if server == nil {
@@ -50,10 +50,10 @@ func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (
 	bool, error) {
 
-	server, err := i.srv.findByNode(ctx, node).one()
+	server, err := i.srv.findByNode(ctx, node).One()
 
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("unable to find node %s: %w", node.Name, err)
 	}
 
 	klog.InfoS(
@@ -74,10 +74,10 @@ func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (
 func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (
 	*cloudprovider.InstanceMetadata, error) {
 
-	server, err := i.srv.findByNode(ctx, node).one()
+	server, err := i.srv.findByNode(ctx, node).One()
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to find node %s: %w", node.Name, err)
 	}
 
 	id, err := uuid.Parse(server.UUID)

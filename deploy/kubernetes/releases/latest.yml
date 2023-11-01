@@ -35,6 +35,15 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - services/status
+  verbs:
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - create
@@ -131,6 +140,7 @@ spec:
             - "cloudscale-cloud-controller-manager"
             - "--allow-untagged-cloud"
             - "--v=3"
+            - "--concurrent-service-syncs=2"
           env:
             - name: CLOUDSCALE_API_URL
               value: https://api.cloudscale.ch/

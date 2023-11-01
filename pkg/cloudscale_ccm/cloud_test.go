@@ -43,25 +43,13 @@ func TestNewCloudscaleProviderWithBadConfig(t *testing.T) {
 	}
 }
 
-func TestNewCloudscaleProviderWithDefaultTimeout(t *testing.T) {
-	provider, _ := newCloudscaleProvider(nil)
-	if cs, _ := provider.(*cloud); cs.timeout != (5 * time.Second) {
-		t.Errorf("unexpected default timeout: %s", cs.timeout)
-	}
+func TestDefaultTimeout(t *testing.T) {
+	timeout := apiTimeout()
+	assert.Equal(t, timeout, 20*time.Second)
 }
 
-func TestNewCloudscaleProviderWithInvalidTimeout(t *testing.T) {
-	os.Setenv(ApiTimeout, "asdf")
-	provider, _ := newCloudscaleProvider(nil)
-	if cs, _ := provider.(*cloud); cs.timeout != (5 * time.Second) {
-		t.Errorf("unexpected fallback timeout: %s", cs.timeout)
-	}
-}
-
-func TestNewCloudscaleProviderWithCustomTimeout(t *testing.T) {
-	os.Setenv(ApiTimeout, "10")
-	provider, _ := newCloudscaleProvider(nil)
-	if cs, _ := provider.(*cloud); cs.timeout != (10 * time.Second) {
-		t.Errorf("ignored %s: %s", ApiTimeout, cs.timeout)
-	}
+func TestCustomTimeout(t *testing.T) {
+	os.Setenv(ApiTimeout, "5")
+	timeout := apiTimeout()
+	assert.Equal(t, timeout, 5*time.Second)
 }

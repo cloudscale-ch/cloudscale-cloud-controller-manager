@@ -5,7 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk"
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/limiter"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -18,10 +19,10 @@ type serverMapper struct {
 func (s *serverMapper) findByNode(
 	ctx context.Context,
 	node *v1.Node,
-) *limiter[cloudscale.Server] {
+) *limiter.Limiter[cloudscale.Server] {
 
 	if node == nil {
-		return newLimiter[cloudscale.Server](nil)
+		return limiter.New[cloudscale.Server](nil)
 	}
 
 	if node.Spec.ProviderID != "" {
@@ -34,7 +35,7 @@ func (s *serverMapper) findByNode(
 		//
 		// See also https://github.com/kubernetes/cloud-provider/issues/3
 		if err != nil {
-			return newLimiter[cloudscale.Server](fmt.Errorf(
+			return limiter.New[cloudscale.Server](fmt.Errorf(
 				"%s is not a valid cloudscale provider id: %w",
 				node.Spec.ProviderID,
 				err,
@@ -47,24 +48,45 @@ func (s *serverMapper) findByNode(
 	return s.findByName(ctx, node.Name)
 }
 
+// mapNodes returns a server for each given node. If a 1:1 mapping across all
+// given nodes can be established, an error is returned.
+func (s *serverMapper) mapNodes(
+	ctx context.Context,
+	nodes []*v1.Node,
+) *limiter.Limiter[cloudscale.Server] {
+	servers := make([]cloudscale.Server, 0, len(nodes))
+
+	for _, node := range nodes {
+		server, err := s.findByNode(ctx, node).One()
+
+		if err != nil {
+			return limiter.New[cloudscale.Server](err)
+		}
+
+		servers = append(servers, *server)
+	}
+
+	return limiter.New[cloudscale.Server](nil, servers...)
+}
+
 // getByProviderID tries to access the server by provider ID (UUID)
 func (s *serverMapper) getByProviderID(
 	ctx context.Context,
 	id cloudscaleProviderID,
-) *limiter[cloudscale.Server] {
+) *limiter.Limiter[cloudscale.Server] {
 
 	server, err := s.client.Servers.Get(ctx, id.UUID().String())
 	if err != nil {
 		var response *cloudscale.ErrorResponse
 
 		if errors.As(err, &response) && response.StatusCode == 404 {
-			return newLimiter[cloudscale.Server](nil)
+			return limiter.New[cloudscale.Server](nil)
 		}
 
-		return newLimiter[cloudscale.Server](err)
+		return limiter.New[cloudscale.Server](err)
 	}
 
-	return newLimiter[cloudscale.Server](nil, *server)
+	return limiter.New[cloudscale.Server](nil, *server)
 }
 
 // findByName returns servers matching the given name (there may be multiple
@@ -72,11 +94,11 @@ func (s *serverMapper) getByProviderID(
 func (s *serverMapper) findByName(
 	ctx context.Context,
 	name string,
-) *limiter[cloudscale.Server] {
+) *limiter.Limiter[cloudscale.Server] {
 
 	servers, err := s.client.Servers.List(ctx)
 	if err != nil {
-		return newLimiter[cloudscale.Server](err)
+		return limiter.New[cloudscale.Server](err)
 	}
 
 	matches := []cloudscale.Server{}
@@ -88,11 +110,13 @@ func (s *serverMapper) findByName(
 		}
 	}
 
-	return newLimiter[cloudscale.Server](nil, matches...)
+	return limiter.New[cloudscale.Server](nil, matches...)
 }
 
-// serverNodeAddresses returns a v1.nodeAddresses slice for the metadata
-func (s *serverMapper) nodeAddresses(server *cloudscale.Server) []v1.NodeAddress {
+// nodeAddresses returns a v1.nodeAddresses slice for the metadata
+func (s *serverMapper) nodeAddresses(
+	server *cloudscale.Server) []v1.NodeAddress {
+
 	if server == nil {
 		return []v1.NodeAddress{}
 	}

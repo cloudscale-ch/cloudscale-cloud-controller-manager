@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
-	"github.com/cloudscale-ch/cloudscale-go-sdk"
+	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 )
@@ -24,18 +24,18 @@ func TestServerByNode(t *testing.T) {
 	mapper := serverMapper{client: server.Client()}
 
 	assertMatch := func(name string, node *v1.Node) {
-		match, err := mapper.findByNode(context.Background(), node).one()
+		match, err := mapper.findByNode(context.Background(), node).One()
 		assert.NoError(t, err)
 		assert.Equal(t, name, match.Name)
 	}
 
 	assertMissing := func(node *v1.Node) {
-		err := mapper.findByNode(context.Background(), node).none()
+		err := mapper.findByNode(context.Background(), node).None()
 		assert.NoError(t, err)
 	}
 
 	assertError := func(node *v1.Node) {
-		_, err := mapper.findByNode(context.Background(), node).one()
+		_, err := mapper.findByNode(context.Background(), node).One()
 		assert.Error(t, err)
 	}
 
@@ -83,7 +83,7 @@ func TestNoServers(t *testing.T) {
 	mapper := serverMapper{client: server.Client()}
 
 	assertMissing := func(node *v1.Node) {
-		match, err := mapper.findByNode(context.Background(), node).atMostOne()
+		match, err := mapper.findByNode(context.Background(), node).AtMostOne()
 		assert.NoError(t, err)
 		assert.Nil(t, match)
 	}
