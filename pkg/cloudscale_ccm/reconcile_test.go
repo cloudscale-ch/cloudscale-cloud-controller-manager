@@ -789,3 +789,102 @@ func TestNextMonitorActions(t *testing.T) {
 		actions.UpdateMonitorNumber("1", 3, "up-threshold"),
 	})
 }
+
+func TestLimitSubnets(t *testing.T) {
+	s := testkit.NewService("service").V1()
+	s.Spec.Ports = []v1.ServicePort{
+		{
+			Protocol: "TCP",
+			Port:     80,
+			NodePort: 123456,
+		},
+	}
+
+	i := newServiceInfo(s, "")
+
+	nodes := []*v1.Node{
+		testkit.NewNode("foo").V1(),
+		testkit.NewNode("bar").V1(),
+	}
+
+	servers := []cloudscale.Server{
+		{
+			Name: "foo",
+			ZonalResource: cloudscale.ZonalResource{
+				Zone: cloudscale.Zone{Slug: "lpg1"},
+			},
+			Interfaces: []cloudscale.Interface{
+				{
+					Addresses: []cloudscale.Address{{
+						Address: "10.0.1.1",
+						Subnet: cloudscale.SubnetStub{
+							UUID: "00000000-0000-0000-0000-000000000001",
+						},
+					}},
+				},
+				{
+					Addresses: []cloudscale.Address{{
+						Address: "10.0.2.1",
+						Subnet: cloudscale.SubnetStub{
+							UUID: "00000000-0000-0000-0000-000000000002",
+						},
+					}},
+				},
+			},
+		},
+		{
+			Name: "bar",
+			ZonalResource: cloudscale.ZonalResource{
+				Zone: cloudscale.Zone{Slug: "lpg1"},
+			},
+			Interfaces: []cloudscale.Interface{
+				{
+					Addresses: []cloudscale.Address{{
+						Address: "10.0.1.2",
+						Subnet: cloudscale.SubnetStub{
+							UUID: "00000000-0000-0000-0000-000000000001",
+						},
+					}},
+				},
+				{
+					Addresses: []cloudscale.Address{{
+						Address: "10.0.2.2",
+						Subnet: cloudscale.SubnetStub{
+							UUID: "00000000-0000-0000-0000-000000000002",
+						},
+					}},
+				},
+			},
+		},
+	}
+
+	// By default, we get two pool members per server
+	state, err := desiredLbState(i, nodes, servers)
+	assert.NoError(t, err)
+	assert.Len(t, state.pools, 1)
+	assert.Len(t, state.members[state.pools[0]], 4)
+	assert.Equal(t, "10.0.1.1", state.members[state.pools[0]][0].Address)
+	assert.Equal(t, "10.0.2.1", state.members[state.pools[0]][1].Address)
+	assert.Equal(t, "10.0.1.2", state.members[state.pools[0]][2].Address)
+	assert.Equal(t, "10.0.2.2", state.members[state.pools[0]][3].Address)
+
+	// We can limit those pool members
+	s.Annotations = make(map[string]string)
+	s.Annotations[LoadBalancerListenerAllowedSubnets] = `
+		["00000000-0000-0000-0000-000000000001"]`
+
+	// Now we should see half the pool members
+	state, err = desiredLbState(i, nodes, servers)
+	assert.NoError(t, err)
+	assert.Len(t, state.pools, 1)
+	assert.Len(t, state.members[state.pools[0]], 2)
+	assert.Equal(t, "10.0.1.1", state.members[state.pools[0]][0].Address)
+	assert.Equal(t, "10.0.1.2", state.members[state.pools[0]][1].Address)
+
+	// If we have no valid addresses, we get an error
+	s.Annotations[LoadBalancerListenerAllowedSubnets] = `
+		["00000000-0000-0000-0000-000000000003"]`
+
+	_, err = desiredLbState(i, nodes, servers)
+	assert.Error(t, err)
+}

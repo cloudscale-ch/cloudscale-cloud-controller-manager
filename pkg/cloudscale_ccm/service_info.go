@@ -110,6 +110,8 @@ func (s serviceInfo) annotation(key string) string {
 		return s.annotationOrDefault(key, "5000")
 	case LoadBalancerListenerTimeoutMemberDataMS:
 		return s.annotationOrDefault(key, "50000")
+	case LoadBalancerListenerAllowedSubnets:
+		return s.annotationOrDefault(key, "[]")
 	default:
 		return s.annotationOrElse(key, func() string {
 			klog.Warning("unknown annotation:", key)
