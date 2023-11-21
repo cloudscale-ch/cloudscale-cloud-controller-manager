@@ -17,7 +17,7 @@ test:
 			./pkg/internal/compare
 
 integration:
-	K8TEST_PATH=${PWD}/k8test go test -count=1 -tags=integration ./pkg/internal/integration -v
+	K8TEST_PATH=${PWD}/k8test go test -count=1 -tags=integration ./pkg/internal/integration -v -timeout 30m
 
 coverage: test
 	go tool cover -html=cover.out

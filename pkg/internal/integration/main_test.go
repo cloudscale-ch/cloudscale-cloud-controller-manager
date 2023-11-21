@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -103,7 +104,72 @@ func (s *IntegrationTestSuite) SetupTest() {
 	}
 }
 
+func (s *IntegrationTestSuite) Region() string {
+	return s.Nodes()[0].Labels["topology.kubernetes.io/region"]
+}
+
+func (s *IntegrationTestSuite) CreateGlobalFloatingIP() (
+	*cloudscale.FloatingIP, error) {
+
+	ip, err := s.api.FloatingIPs.Create(
+		context.Background(), &cloudscale.FloatingIPCreateRequest{
+			IPVersion: 4,
+			Type:      "global",
+		},
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Floating IP: %s", err)
+	}
+
+	s.resources = append(s.resources, ip.HREF)
+
+	return ip, nil
+}
+
+func (s *IntegrationTestSuite) CreateRegionalFloatingIP(region string) (
+	*cloudscale.FloatingIP, error) {
+
+	ip, err := s.api.FloatingIPs.Create(
+		context.Background(), &cloudscale.FloatingIPCreateRequest{
+			IPVersion: 4,
+			Type:      "regional",
+			RegionalResourceRequest: cloudscale.RegionalResourceRequest{
+				Region: region,
+			},
+		},
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Floating IP: %s", err)
+	}
+
+	s.resources = append(s.resources, ip.HREF)
+
+	return ip, nil
+}
+
 func (s *IntegrationTestSuite) TearDownTest() {
+	errors := 0
+
+	if s.resources != nil {
+		for _, url := range s.resources {
+			req, err := s.api.NewRequest(
+				context.Background(), http.MethodDelete, url, nil)
+			if err != nil {
+				s.T().Logf("preparing to delete %s failed: %s", url, err)
+				errors++
+			}
+
+			err = s.api.Do(context.Background(), req, nil)
+			if err != nil {
+				s.T().Logf("deleting %s failed: %s", url, err)
+				errors++
+			}
+		}
+	}
+	s.resources = nil
+
 	err := s.k8s.CoreV1().Namespaces().Delete(
 		context.Background(),
 		s.ns,
@@ -111,7 +177,12 @@ func (s *IntegrationTestSuite) TearDownTest() {
 	)
 
 	if err != nil {
-		panic(fmt.Sprintf("could not delete namespace %s: %s", s.ns, err))
+		s.T().Logf("could not delete namespace %s: %s", s.ns, err)
+		errors++
+	}
+
+	if errors > 0 {
+		panic(fmt.Sprintf("failed cleanup test: %d errors", errors))
 	}
 
 	s.ns = ""

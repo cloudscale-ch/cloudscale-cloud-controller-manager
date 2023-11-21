@@ -211,6 +211,7 @@ kind: Service
 metadata:
   annotations:
     k8s.cloudscale.ch/loadbalancer-listener-allowed-cidrs: '["1.2.3.0/24"]'
+    k8s.cloudscale.ch/loadbalancer-floating-ips: '["1.2.3.4/32"]'
 ```
 
 The full set of configuration toggles can be found in the [`pkg/cloudscale_ccm/loadbalancer.go`](pkg/cloudscale/ccm/loadbalancer.go) file.

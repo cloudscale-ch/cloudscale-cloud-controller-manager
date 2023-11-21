@@ -231,6 +231,9 @@ func TestActualState(t *testing.T) {
 			},
 		},
 	)
+	server.On("/v1/floating-ips", 200,
+		[]cloudscale.FloatingIP{},
+	)
 	server.Start()
 	defer server.Close()
 

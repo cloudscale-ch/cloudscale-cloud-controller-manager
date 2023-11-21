@@ -4,13 +4,13 @@
 #     export KUBECONFIG=path/to/kubeconfig
 #     kubectl apply -f nginx-hello.yml
 #
-# Wait for `kubectl describe hello` to show "Loadbalancer Ensured", then
-# use the IP address found under "LoadBalancer Ingress" to connect to the
+# Wait for `kubectl describe service hello` to show "Loadbalancer Ensured",
+# then use the IP address found under "LoadBalancer Ingress" to connect to the
 # service.
 #
 # You can also use the following shortcut:
 #
-#     curl http://$(kubectl get service hello -o json | jq -r '.status.loadBalancer.ingress[0].ip')
+#     curl http://$(kubectl get service hello -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 #
 ---
 apiVersion: apps/v1
