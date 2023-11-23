@@ -75,9 +75,27 @@ func desiredLbState(
 		}
 	}
 
+	// Parse the loadbalancer VIP addresses
+	var vip []cloudscale.VIPAddressRequest
+
+	err := serviceInfo.annotationMarshal(LoadBalancerVIPAddresses, &vip)
+	if err != nil {
+		return nil, err
+	}
+
+	addrs := make([]cloudscale.VIPAddress, 0, len(vip))
+	for _, v := range vip {
+		addrs = append(addrs, cloudscale.VIPAddress{
+			Address: v.Address,
+			Subnet: cloudscale.SubnetStub{
+				UUID: v.Subnet,
+			},
+		})
+	}
+
 	s := newLbState(&cloudscale.LoadBalancer{
 		Name:         serviceInfo.annotation(LoadBalancerName),
-		VIPAddresses: []cloudscale.VIPAddress{},
+		VIPAddresses: addrs,
 		Flavor: cloudscale.LoadBalancerFlavorStub{
 			Slug: serviceInfo.annotation(LoadBalancerFlavor),
 		},
@@ -359,7 +377,26 @@ func nextLbActions(
 	// If the lb requires other changes, inform the user that they need to
 	// recreate the service themselves.
 	if len(desired.lb.VIPAddresses) > 0 {
-		if !slices.Equal(desired.lb.VIPAddresses, actual.lb.VIPAddresses) {
+		equal := slices.EqualFunc(
+			desired.lb.VIPAddresses,
+			actual.lb.VIPAddresses,
+			func(d cloudscale.VIPAddress, a cloudscale.VIPAddress) bool {
+
+				// The desired address may be missing, the actual address
+				// is always given.
+				if d.Address != "" && d.Address != a.Address {
+					return false
+				}
+
+				if d.Subnet.UUID != a.Subnet.UUID {
+					return false
+				}
+
+				return true
+			},
+		)
+
+		if !equal {
 			return nil, fmt.Errorf(
 				"VIP addresses for %s changed, please re-create the service",
 				actual.lb.HREF,

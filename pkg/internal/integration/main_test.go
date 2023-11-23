@@ -35,6 +35,8 @@ type IntegrationTestSuite struct {
 	api           *cloudscale.Client
 	ns            string
 	clusterPrefix string
+	resources     []string
+	sshkey        string
 }
 
 func (s *IntegrationTestSuite) SetupSuite() {
@@ -43,6 +45,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 	if !ok {
 		log.Fatalf("could not find K8TEST_PATH environment variable\n")
 	}
+	s.sshkey = fmt.Sprintf("%s/cluster/ssh", k8test)
 
 	if prefix, ok := os.LookupEnv("CLUSTER_PREFIX"); ok {
 		s.clusterPrefix = prefix

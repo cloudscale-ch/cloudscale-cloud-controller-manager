@@ -53,7 +53,7 @@ func (a *CreateLbAction) Run(
 	for _, addr := range a.lb.VIPAddresses {
 		addrs = append(addrs, cloudscale.VIPAddressRequest{
 			Address: addr.Address,
-			Subnet:  addr.Subnet.CIDR,
+			Subnet:  addr.Subnet.UUID,
 		})
 	}
 

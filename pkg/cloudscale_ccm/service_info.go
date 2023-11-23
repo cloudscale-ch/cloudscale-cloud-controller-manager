@@ -84,6 +84,8 @@ func (s serviceInfo) annotation(key string) string {
 		return s.annotationOrDefault(key, "tcp")
 	case LoadBalancerFlavor:
 		return s.annotationOrDefault(key, "lb-standard")
+	case LoadBalancerVIPAddresses:
+		return s.annotationOrDefault(key, "[]")
 	case LoadBalancerPoolAlgorithm:
 		return s.annotationOrDefault(key, "round_robin")
 	case LoadBalancerHealthMonitorDelayS:
@@ -153,6 +155,15 @@ func (s serviceInfo) annotationList(key string) ([]string, error) {
 	}
 
 	return list, nil
+}
+
+// annotationMarshal marshals the annotation to the given type.
+func (s serviceInfo) annotationMarshal(key string, target any) error {
+	err := json.Unmarshal([]byte(s.annotation(key)), target)
+	if err != nil {
+		return fmt.Errorf("failed to parse %s: %w", key, err)
+	}
+	return nil
 }
 
 // annotationOrElase returns the annotation with the given key, or returns the

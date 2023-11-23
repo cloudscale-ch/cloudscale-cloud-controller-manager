@@ -50,6 +50,29 @@ const (
 	// This can not be changed once the service is created.
 	LoadBalancerZone = "k8s.cloudscale.ch/loadbalancer-zone"
 
+	// LoadBalancerVIPAddresses defines the virtual IP addresses through which
+	// incoming traffic is received. this defaults to an automatically assigned
+	// public IPv4 and IPv6 address.
+	//
+	// If you want to use a specific private subnet instead, to load balance
+	// inside your cluster, you have to specify the subnet the loadbalancer
+	// should bind to, and optionally what IP address it should use (if you
+	// don't want an automatically assigned one).
+	//
+	// The value of this option is a list of JSON objects, as documented here:
+	//
+	// https://www.cloudscale.ch/en/api/v1#vip_addresses-attribute-specification
+	//
+	// By default, an empty list is set (to get a public address pair).
+	//
+	// This can currently not be changed and will cause an error if attempted,
+	// as the loadbalancer would have to be recreated, causing potential
+	// downtime, and a release of any address it held.
+	//
+	// To change the address it is recommended to create a new service
+	// resources instead.
+	LoadBalancerVIPAddresses = "k8s.cloudscale.ch/loadbalancer-vip-addresses"
+
 	// LoadBalancerPoolAlgorithm defines the load balancing algorithm used
 	// by the loadbalancer. See the API documentation for more information:
 	//
