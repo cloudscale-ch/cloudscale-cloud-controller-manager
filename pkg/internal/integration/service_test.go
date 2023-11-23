@@ -63,7 +63,7 @@ func (s *IntegrationTestSuite) CreateDeployment(
 }
 
 func (s *IntegrationTestSuite) ExposeDeployment(
-	name string, port int32, targetPort int32) {
+	name string, port int32, targetPort int32, annotations map[string]string) {
 
 	spec := v1.ServiceSpec{
 		Type: v1.ServiceTypeLoadBalancer,
@@ -82,8 +82,11 @@ func (s *IntegrationTestSuite) ExposeDeployment(
 	_, err := s.k8s.CoreV1().Services(s.ns).Create(
 		context.Background(),
 		&v1.Service{
-			ObjectMeta: metav1.ObjectMeta{Name: name},
-			Spec:       spec,
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        name,
+				Annotations: annotations,
+			},
+			Spec: spec,
 		},
 		metav1.CreateOptions{},
 	)
@@ -171,7 +174,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	})
 
 	// Expose the deployment using a LoadBalancer service
-	s.ExposeDeployment("hostname", 80, 8080)
+	s.ExposeDeployment("hostname", 80, 8080, nil)
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for hostname service to be ready")
@@ -280,7 +283,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	}
 
 	// Expose the deployment using a LoadBalancer service
-	s.ExposeDeployment("peeraddr", 80, 8080)
+	s.ExposeDeployment("peeraddr", 80, 8080, nil)
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for peeraddr service to be ready")
