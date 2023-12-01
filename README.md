@@ -10,7 +10,15 @@ Provides the following features:
 
 ## Test Cluster
 
-To test the code on a vanilla Kubernetes cluster, you can use `helpers/run-in-test-cluster`. Note that you need a `CLOUDSCALE_API_TOKEN` for this to work, and this may incur costs on your side.
+To test the CCM on a vanilla Kubernetes cluster, you can use `helpers/run-in-test-cluster`. This will create a small Kubernetes cluster at cloudscale.ch,
+and install the current development version in it.
+
+Note that you need a `CLOUDSCALE_API_TOKEN` for this to work, and this may incur costs on your side:
+
+```bash
+export CLOUDSCALE_API_TOKEN="..."
+helpers/run-in-test-cluster
+```
 
 To clean the cluster up, run `helpers/cleanup`.
 
