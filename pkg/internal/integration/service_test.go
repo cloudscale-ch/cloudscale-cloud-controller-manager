@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/netip"
 	"strings"
@@ -20,7 +21,7 @@ import (
 )
 
 func (s *IntegrationTestSuite) CreateDeployment(
-	name string, image string, replicas int32, port int32, args []string) {
+	name string, image string, replicas int32, port int32, args ...string) {
 
 	spec := appsv1.DeploymentSpec{
 		Replicas: &replicas,
@@ -168,17 +169,14 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 
 	// Deploy a TCP server that returns the hostname
 	s.T().Log("Creating hostname deployment")
-	s.CreateDeployment("hostname", "alpine/socat", 2, 8080, []string{
-		`TCP-LISTEN:8080,fork`,
-		`SYSTEM:'echo $HOSTNAME'`,
-	})
+	s.CreateDeployment("nginx", "nginxdemos/hello:plain-text", 2, 80)
 
 	// Expose the deployment using a LoadBalancer service
-	s.ExposeDeployment("hostname", 80, 8080, nil)
+	s.ExposeDeployment("nginx", 80, 80, nil)
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for hostname service to be ready")
-	service := s.AwaitServiceReady("hostname", 180*time.Second)
+	service := s.AwaitServiceReady("nginx", 180*time.Second)
 	s.Require().NotNil(service)
 
 	// Ensure the annotations are set
@@ -197,14 +195,15 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	s.T().Log("Verifying hostname service responses")
 	responses := make(map[string]int)
 	for i := 0; i < 100; i++ {
-		output, err := testkit.TCPRead(addr, 80)
+		response, err := testkit.HelloNginx(addr, 80)
 		s.Assert().NoError(err)
 
-		if output != "" {
-			responses[output]++
+		if response != nil {
+			s.Assert().NotEmpty(response.ServerName)
+			responses[response.ServerName]++
 		}
 
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 
 	s.Assert().Len(responses, 2)
@@ -232,20 +231,18 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	// single instance as we want to check that the routing works right with
 	// all policies.
 	s.T().Log("Creating peeraddr deployment")
-	s.CreateDeployment("peeraddr", "alpine/socat", 1, 8080, []string{
-		`TCP-LISTEN:8080,fork`,
-		`SYSTEM:'echo $SOCAT_PEERADDR'`,
-	})
+	s.CreateDeployment("peeraddr", "ghcr.io/majd/ip-curl", 1, 3000)
 
 	// Waits until the request is received through the given prefix and
 	// ten responses with the expected address come back.
 	assertPrefix := func(addr string, prefix *netip.Prefix) {
+		url := fmt.Sprintf("http://%s", addr)
 		successful := 0
 
 		for i := 0; i < 45; i++ {
 			time.Sleep(1 * time.Second)
 
-			peer, err := testkit.TCPRead(addr, 80)
+			peer, err := testkit.HTTPRead(url)
 			if err != nil {
 				continue
 			}
@@ -271,9 +268,10 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 
 	// Ensures the traffic is handled without unexpected delay
 	assertFastResponses := func(addr string, prefix *netip.Prefix) {
+		url := fmt.Sprintf("http://%s", addr)
 		for i := 0; i < 60; i++ {
 			before := time.Now()
-			_, err := testkit.TCPRead(addr, 80)
+			_, err := testkit.HTTPRead(url)
 			after := time.Now()
 
 			// Bad requests take around 5s as they hit a timeout
@@ -283,7 +281,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	}
 
 	// Expose the deployment using a LoadBalancer service
-	s.ExposeDeployment("peeraddr", 80, 8080, nil)
+	s.ExposeDeployment("peeraddr", 80, 3000, nil)
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for peeraddr service to be ready")
