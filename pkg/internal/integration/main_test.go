@@ -75,7 +75,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 	s.api = cloudscale.NewClient(httpClient)
 }
 
-func (s *IntegrationTestSuite) BeforeTest(suite string, test string) {
+func (s *IntegrationTestSuite) SetupTest() {
 	s.ns = fmt.Sprintf("cloudscale-test-%08x", rand.Uint32())
 
 	_, err := s.k8s.CoreV1().Namespaces().Create(
@@ -93,7 +93,7 @@ func (s *IntegrationTestSuite) BeforeTest(suite string, test string) {
 	}
 }
 
-func (s *IntegrationTestSuite) AfterTest(suite string, test string) {
+func (s *IntegrationTestSuite) TearDownTest() {
 	err := s.k8s.CoreV1().Namespaces().Delete(
 		context.Background(),
 		s.ns,
