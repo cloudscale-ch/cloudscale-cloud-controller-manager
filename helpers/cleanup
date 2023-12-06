@@ -4,8 +4,12 @@
 #
 set -euo pipefail
 
+export CLUSTER_PREFIX="${CLUSTER_PREFIX-k8test}"
+
 if ! test -f k8test/cluster/inventory.yml; then
   exit 0
 fi
 
-k8test/playbooks/destroy-cluster.yml -i k8test/cluster/inventory.yml
+k8test/playbooks/destroy-cluster.yml \
+  -i k8test/cluster/inventory.yml \
+  -e cluster_prefix="$CLUSTER_PREFIX"

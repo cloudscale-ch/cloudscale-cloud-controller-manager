@@ -7,6 +7,7 @@ set -euo pipefail
 
 export ANSIBLE_CONFIG="$PWD"/k8test/ansible.cfg
 export KUBERNETES="${KUBERNETES-latest}"
+export CLUSTER_PREFIX="${CLUSTER_PREFIX-k8test}"
 
 # Prepares k8test with an existing virtual env, or a newly created on
 function ensure-k8test() {
@@ -73,7 +74,8 @@ function ensure-inventory() {
       -e control_count=2 \
       -e worker_count=2 \
       -e kubelet_extra_args='--cloud-provider=external' \
-      -e kubernetes="${KUBERNETES}"
+      -e kubernetes="${KUBERNETES}" \
+      -e cluster_prefix="${CLUSTER_PREFIX}"
 
     # Those won't really change between runs, so update them during install
     k8test/playbooks/update-secrets.yml \
@@ -104,7 +106,10 @@ function apply-resources() {
   kubectl apply -f /tmp/ccm.yml
 }
 
-ensure-k8test
-ensure-inventory
-build-container
-apply-resources
+# Execute if not sourced
+if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
+  ensure-k8test
+  ensure-inventory
+  build-container
+  apply-resources
+fi

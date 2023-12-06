@@ -25,3 +25,11 @@ helpers/run-in-test-cluster
 To clean the cluster up, run `helpers/cleanup`.
 
 This is based on [k8test](https://github.com/cloudscale-ch/k8test), our in-house Kubernetes integration test utility.
+
+## Kubernetes Support Policy
+
+We aim to support the latest three minor Kubernetes releases. Older releases should work as well, but we do not test them automatically and we may decide not to fix bugs related to older releases.
+
+For example, at the time of this writing 1.28.4 is the latest release, so we currently support 1.28.x, 1.27.x, and 1.26.x.
+
+Tests are run reguarly against the latest patch of the previous three minor releases.
