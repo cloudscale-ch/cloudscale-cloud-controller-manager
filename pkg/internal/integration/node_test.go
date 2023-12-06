@@ -77,9 +77,9 @@ func (s *IntegrationTestSuite) Servers() []cloudscale.Server {
 	return servers
 }
 
-func (s *IntegrationTestSuite) ServerNamed(name string) *cloudscale.Server {
+func (s *IntegrationTestSuite) FirstServerMatching(name string) *cloudscale.Server {
 	for _, server := range s.Servers() {
-		if server.Name == name {
+		if strings.Contains(server.Name, name) {
 			return &server
 		}
 	}
@@ -185,7 +185,9 @@ func (s *IntegrationTestSuite) TestNodeRestartServer() {
 	require.Len(s.T(), shutdownNodes(), 0, "no nodes may be shutdown yet")
 
 	// Shutdown the server
-	server := s.ServerNamed("k8test-worker-1")
+	server := s.FirstServerMatching("worker-1")
+	s.Require().NotNil(server)
+
 	err := s.api.Servers.Stop(context.Background(), server.UUID)
 	assert.NoError(s.T(), err, "could not stop server %s", server.Name)
 
