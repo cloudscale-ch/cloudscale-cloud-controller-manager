@@ -64,19 +64,19 @@ jobs:
       - name: Run Unit Tests
         run: make test
 
-  supported-releases:
+  test-matrix:
     name: "Get Kubernetes Releases"
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: "List supported releases"
+      - name: "Generate Test Matrix"
         id: list
-        run: 'echo "releases=$(helpers/supported-releases)" >> $GITHUB_OUTPUT'
+        run: 'echo "tests=$(helpers/test-matrix)" >> $GITHUB_OUTPUT'
 
     outputs:
-      releases: ${{ steps.list.outputs.releases }}
+      tests: ${{ steps.list.outputs.tests }}
 
   integration:
     name: "Kubernetes ${{ matrix.kubernetes }}"
@@ -85,17 +85,18 @@ jobs:
     needs:
       - lint
       - unit
-      - supported-releases
+      - test-matrix
 
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
-        kubernetes: "${{ fromJson(needs.supported-releases.outputs.releases) }}"
+        include: "${{ fromJson(needs.test-matrix.outputs.tests) }}"
 
     env:
       CLOUDSCALE_API_TOKEN: ${{ secrets.CLOUDSCALE_API_TOKEN }}
       KUBERNETES: '${{ matrix.kubernetes }}'
+      SUBNET: '${{ matrix.subnet }}'
+      CLUSTER_PREFIX: '${{ matrix.cluster_prefix }}'
 
     # Prevent integration tests from running in parallel. Ideally this should
     # be seuqential, but that won't work due to the following issue:
@@ -112,9 +113,6 @@ jobs:
       - uses: actions/setup-go@v4
         with:
           go-version: '${{ env.GO_VERSION }}'
-
-      - name: Generate cluster prefix
-        run: echo CLUSTER_PREFIX="k8test-$(uuidgen | cut -d '-' -f 1)" >> $GITHUB_ENV
 
       - name: Create Test Cluster
         run: helpers/run-in-test-cluster

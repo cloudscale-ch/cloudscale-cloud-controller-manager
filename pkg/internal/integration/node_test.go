@@ -69,7 +69,7 @@ func (s *IntegrationTestSuite) Servers() []cloudscale.Server {
 		context.Background(),
 		cloudscale.WithTagFilter(
 			cloudscale.TagMap{
-				"source": "k8test",
+				"cluster_prefix": s.clusterPrefix,
 			},
 		),
 	)

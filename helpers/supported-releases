@@ -1,9 +1,0 @@
-#!/usr/bin/env bash
-source helpers/run-in-test-cluster
-ensure-k8test > /dev/null
-
-{
-  k8test/helpers/release-set --kubernetes=0 --limit kubernetes | jq -r '.kubernetes.version'
-  k8test/helpers/release-set --kubernetes=-1 --limit kubernetes | jq -r '.kubernetes.version'
-  k8test/helpers/release-set --kubernetes=-2 --limit kubernetes | jq -r '.kubernetes.version'
-} | jq --raw-input --null-input --compact-output '[inputs]'
