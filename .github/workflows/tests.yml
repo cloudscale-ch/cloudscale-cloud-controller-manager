@@ -4,10 +4,16 @@ on:
   push:
     branches:
       - main
+
   pull_request:
 
   # Allow to run this workflow manually from the Actions tab
   workflow_dispatch:
+
+  # Run this regularly, to get integration tests results against new
+  # Kubernetes releases.
+  schedule:
+    - cron: '15 15 * * 5'
 
 permissions:
   contents: read
