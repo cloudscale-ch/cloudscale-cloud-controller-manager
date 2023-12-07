@@ -31,9 +31,10 @@ func TestIntegration(t *testing.T) {
 
 type IntegrationTestSuite struct {
 	suite.Suite
-	k8s kubernetes.Interface
-	api *cloudscale.Client
-	ns  string
+	k8s           kubernetes.Interface
+	api           *cloudscale.Client
+	ns            string
+	clusterPrefix string
 }
 
 func (s *IntegrationTestSuite) SetupSuite() {
@@ -41,6 +42,12 @@ func (s *IntegrationTestSuite) SetupSuite() {
 	k8test, ok := os.LookupEnv("K8TEST_PATH")
 	if !ok {
 		log.Fatalf("could not find K8TEST_PATH environment variable\n")
+	}
+
+	if prefix, ok := os.LookupEnv("CLUSTER_PREFIX"); ok {
+		s.clusterPrefix = prefix
+	} else {
+		s.clusterPrefix = "k8test"
 	}
 
 	path := fmt.Sprintf("%s/cluster/admin.conf", k8test)

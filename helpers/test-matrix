@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Make sure the k8test/helpers/release-set CLI is available
+source helpers/run-in-test-cluster
+ensure-k8test > /dev/null
+
+# Returns the matrix entry for the given index (1-n)
+function matrixentry {
+  k8test/helpers/release-set --kubernetes=$(( 1 - $1 )) --limit kubernetes | jq -r '.kubernetes.version'
+  echo "10.100.$1.0/24"
+  echo "k8test-$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -d '-' -f 1)"
+}
+
+function matrixobject {
+  matrixentry "$1" | jq --raw-input --null-input --compact-output '{
+    "kubernetes": inputs,
+    "subnet": inputs,
+    "cluster_prefix": inputs,
+  }'
+}
+
+function matrixentries {
+  matrixobject 1
+  matrixobject 2
+  matrixobject 3
+}
+
+function matrixobjects {
+  matrixentries | jq --null-input --compact-output '[inputs]'
+}
+
+matrixobjects

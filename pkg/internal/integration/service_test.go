@@ -225,7 +225,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 
 	// Traffic received via "Local" policy has no natting. The address is
 	// going to be private network address of the load balancer.
-	local_policy_prefix := netip.MustParsePrefix("10.100.10.0/24")
+	local_policy_prefix := netip.MustParsePrefix("10.100.0.0/16")
 
 	// Deploy a TCP server that returns the remote IP address. Only use a
 	// single instance as we want to check that the routing works right with
