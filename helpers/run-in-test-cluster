@@ -9,6 +9,8 @@ export ANSIBLE_CONFIG="$PWD"/k8test/ansible.cfg
 export KUBERNETES="${KUBERNETES-latest}"
 export CLUSTER_PREFIX="${CLUSTER_PREFIX-k8test}"
 export SUBNET="${SUBNET-10.100.1.0/24}"
+export LATEST="quay.io/cloudscalech/cloudscale-cloud-controller-manager:latest"
+export IMAGE="${IMAGE-quay.io/cloudscalech/cloudscale-cloud-controller-manager:test}"
 
 # Prepares k8test with an existing virtual env, or a newly created on
 function ensure-k8test() {
@@ -85,20 +87,29 @@ function ensure-inventory() {
   fi
 }
 
-# Build the latest container each time
-function build-container() {
-  k8test/playbooks/build-container.yml \
+# Build the latest image each time
+function build-image() {
+  k8test/playbooks/build-image.yml \
     -i k8test/cluster/inventory.yml \
     -e dockerfile=./Dockerfile \
-    -e tag=quay.io/cloudscalech/cloudscale-cloud-controller-manager:test \
-    -e extra='--build-arg=VERSION=test'
+    -e tag="$IMAGE" \
+    -e extra='--build-arg=VERSION=test' \
+    -l controls
+}
+
+# Import an image from the host
+function import-image() {
+  k8test/playbooks/import-image.yml \
+    -i k8test/cluster/inventory.yml \
+    -e image="$PWD/image.tar" \
+    -l controls
 }
 
 # Re-apply the resources each time
 function apply-resources() {
   api_url=$(echo "${CLOUDSCALE_API_URL-https://api.cloudscale.ch}" | sed 's|/v1||g')
 
-  sed 's/controller-manager:latest/controller-manager:test/g' \
+  sed "s|${LATEST}|${IMAGE}|g" \
     deploy/kubernetes/releases/latest.yml \
     | sed "s|https://api.cloudscale.ch|${api_url}|g" \
     > /tmp/ccm.yml
@@ -110,8 +121,34 @@ function apply-resources() {
 
 # Execute if not sourced
 if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
+  # The image name requires a slash in it, or Podman will add `localhost/` and
+  # confuse Kubernetes.
+  if [[ "$IMAGE" != *"/"* ]]; then
+    echo "\$IMAGE has no slash: $IMAGE"
+    exit 1
+  fi
+
   ensure-k8test
   ensure-inventory
-  build-container
+
+  # By default, the image is built every time (with the latest changes
+  # in the current directory), but it is also possible to import a pre-built
+  # image (for CI).
+  #
+  # The pre-built image is expected to exist as `image.tar` in the
+  # current directory. It should be created as follows:
+  #
+  # export IMAGE=cloudscale-ccm
+  # export IMAGE_SOURCE=import
+  # docker build --platform=linux/amd64 -t $IMAGE
+  # docker save $IMAGE -o image.tar
+  # run-in-test-cluster
+  #
+  if [[ "${IMAGE_SOURCE-build}" == "build" ]]; then
+    build-image
+  else
+    import-image
+  fi
+
   apply-resources
 fi
