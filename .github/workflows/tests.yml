@@ -84,6 +84,34 @@ jobs:
     outputs:
       tests: ${{ steps.list.outputs.tests }}
 
+  build-image:
+    name: "Build Container Image"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Evaluate image name
+        run: 'helpers/image-from-ref >> $GITHUB_ENV'
+
+      - name: Build image
+        run: 'docker build --platform=linux/amd64 --tag "$IMAGE" .'
+
+      - name: Export image
+        run: 'docker image save "$IMAGE" -o image.tar'
+
+      - name: Store hash
+        run: 'shasum -a 256 image.tar | tee image.tar.sha256'
+
+      - name: Store image
+        uses: actions/upload-artifact@v4
+        with:
+          name: tested-image
+          path: |
+            image.tar
+            image.tar.sha256
+          retention-days: 30d
+
   integration:
     name: "Kubernetes ${{ matrix.kubernetes }}"
     runs-on: ubuntu-latest
@@ -92,6 +120,7 @@ jobs:
       - lint
       - unit
       - test-matrix
+      - build-image
 
     strategy:
       fail-fast: false
@@ -103,6 +132,7 @@ jobs:
       KUBERNETES: '${{ matrix.kubernetes }}'
       SUBNET: '${{ matrix.subnet }}'
       CLUSTER_PREFIX: '${{ matrix.cluster_prefix }}'
+      IMAGE_SOURCE: import
 
     # Prevent integration tests from running in parallel. Ideally this should
     # be seuqential, but that won't work due to the following issue:
@@ -116,9 +146,24 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
+      - name: Load image
+        uses: actions/download-artifact@v4
+        with:
+          name: tested-image
+
+      - name: Validate hash
+        run: 'shasum --check image.tar.sha256'
+
       - uses: actions/setup-go@v4
         with:
           go-version: '${{ env.GO_VERSION }}'
+
+      - name: Evaluate image name
+        run: 'helpers/image-from-ref >> $GITHUB_ENV'
+
+      - name: Stagger tests
+        run: 'sleep $((RANDOM % 60 + 1))'
 
       - name: Create Test Cluster
         run: helpers/run-in-test-cluster
