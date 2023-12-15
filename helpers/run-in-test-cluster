@@ -61,7 +61,7 @@ function random-zone() {
 }
 
 # Launches the test cluster, if there's no admin.conf yet
-function ensure-inventory() {
+function ensure-cluster() {
   if ! test -d k8test/cluster; then
     mkdir k8test/cluster
   fi
@@ -71,19 +71,38 @@ function ensure-inventory() {
   fi
  
   if ! test -f k8test/cluster/admin.conf; then
+    zone="$(random-zone)"
+
+    # First create the cluster, without configuring the network
     k8test/playbooks/create-cluster.yml \
-      -e zone="$(random-zone)" \
+      -e zone="$zone" \
       -e ssh_key=k8test/cluster/ssh.pub \
       -e control_count=2 \
       -e worker_count=2 \
       -e kubelet_extra_args='--cloud-provider=external' \
       -e kubernetes="${KUBERNETES}" \
       -e cluster_prefix="${CLUSTER_PREFIX}" \
-      -e subnet="${SUBNET}"
+      -e subnet="${SUBNET}" \
+      --tags setup-vms,setup-controls
 
     # Those won't really change between runs, so update them during install
     k8test/playbooks/update-secrets.yml \
       -i k8test/cluster/inventory.yml
+
+    # Second, get the CCM running. Without it setting the node IPs, Cilium
+    # won't work.
+    update-ccm
+
+    # Finally, setup the cluster to completion
+    k8test/playbooks/create-cluster.yml \
+      -e zone="$zone" \
+      -e ssh_key=k8test/cluster/ssh.pub \
+      -e control_count=2 \
+      -e worker_count=2 \
+      -e kubelet_extra_args='--cloud-provider=external' \
+      -e kubernetes="${KUBERNETES}" \
+      -e cluster_prefix="${CLUSTER_PREFIX}" \
+      -e subnet="${SUBNET}"    
   fi
 }
 
@@ -105,32 +124,8 @@ function import-image() {
     -l controls
 }
 
-# Re-apply the resources each time
-function apply-resources() {
-  api_url=$(echo "${CLOUDSCALE_API_URL-https://api.cloudscale.ch}" | sed 's|/v1||g')
-
-  sed "s|${LATEST}|${IMAGE}|g" \
-    deploy/kubernetes/releases/latest.yml \
-    | sed "s|https://api.cloudscale.ch|${api_url}|g" \
-    > /tmp/ccm.yml
-
-  export KUBECONFIG=k8test/cluster/admin.conf
-  kubectl delete -f /tmp/ccm.yml --ignore-not-found=true
-  kubectl apply -f /tmp/ccm.yml
-}
-
-# Execute if not sourced
-if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
-  # The image name requires a slash in it, or Podman will add `localhost/` and
-  # confuse Kubernetes.
-  if [[ "$IMAGE" != *"/"* ]]; then
-    echo "\$IMAGE has no slash: $IMAGE"
-    exit 1
-  fi
-
-  ensure-k8test
-  ensure-inventory
-
+# Install/update the CCM
+function update-ccm() {
   # By default, the image is built every time (with the latest changes
   # in the current directory), but it is also possible to import a pre-built
   # image (for CI).
@@ -151,4 +146,38 @@ if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
   fi
 
   apply-resources
+}
+
+# Re-apply the resources each time
+function apply-resources() {
+  api_url=$(echo "${CLOUDSCALE_API_URL-https://api.cloudscale.ch}" | sed 's|/v1||g')
+
+  sed "s|${LATEST}|${IMAGE}|g" \
+    deploy/kubernetes/releases/latest.yml \
+    | sed "s|https://api.cloudscale.ch|${api_url}|g" \
+    > /tmp/ccm.yml
+
+  export KUBECONFIG=k8test/cluster/admin.conf
+  kubectl delete -f /tmp/ccm.yml --ignore-not-found=true
+  kubectl apply -f /tmp/ccm.yml
+}
+
+# Execute if not sourced
+if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
+
+  # The image name requires a slash in it, or Podman will add `localhost/` and
+  # confuse Kubernetes.
+  if [[ "$IMAGE" != *"/"* ]]; then
+    echo "\$IMAGE has no slash: $IMAGE"
+    exit 1
+  fi
+
+  first_run=$(test ! -f k8test/cluster/inventory.yml && echo "yes" || echo "no")
+
+  ensure-k8test
+  ensure-cluster
+
+  if [[ "$first_run" == "no" ]]; then
+    update-ccm
+  fi
 fi
