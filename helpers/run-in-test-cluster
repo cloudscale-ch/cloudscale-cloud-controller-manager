@@ -153,7 +153,7 @@ function apply-resources() {
   api_url=$(echo "${CLOUDSCALE_API_URL-https://api.cloudscale.ch}" | sed 's|/v1||g')
 
   sed "s|${LATEST}|${IMAGE}|g" \
-    deploy/kubernetes/releases/latest.yml \
+    deploy/latest.yml \
     | sed "s|https://api.cloudscale.ch|${api_url}|g" \
     > /tmp/ccm.yml
 
