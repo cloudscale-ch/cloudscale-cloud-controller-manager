@@ -38,7 +38,7 @@ You can access the created cluster as follows:
 
 ```bash
 # Via kubectl
-export KUBECONFIG = k8test/cluster/admin.conf
+export KUBECONFIG=k8test/cluster/admin.conf
 kubectl get nodes
 
 # Via ssh
@@ -51,7 +51,7 @@ To cleanup:
 helpers/cleanup
 ```
 
-> :warning: This may incur costs on your side. Clusters that are removed may also leave behind loadbalancers, if associated services are not removed first. Please look at https://control.cloudscale.ch after cleanup to ensure that everything was removed.
+> :warning: This may incur costs on your side. Clusters that are removed may also leave behind load balancers, if associated services are not removed first. Please look at https://control.cloudscale.ch after cleanup to ensure that everything was removed.
 
 # Operator Manual
 
@@ -67,13 +67,13 @@ kubelet --cloud-provider=external
 
 This should be persisted indefinitely, depending on your distribution. Feel free to open an issue if you have trouble locating the right place to do this in your setup.
 
-A cluster careted this way **will start all nodes tainted** as follows:
+A cluster created this way **will start all nodes tainted** as follows:
 
 ```yaml
 node.cloudprovider.kubernetes.io/uninitialized: true
 ```
 
-This taint will be removed, once the CCM has initalized the nodes.
+This taint will be removed, once the CCM has initialized the nodes.
 
 ### Node IPs
 
@@ -119,7 +119,7 @@ To install the latest version:
 kubectl apply -f https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager/releases/latest/download/config.yml
 ```
 
-To install a specific version, or to upgrade to a new version, have a look at the [list of releases](https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager/releases].
+To install a specific version, or to upgrade to a new version, have a look at the [list of releases](https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager/releases).
 
 Each release has a version-specific `kubectl apply` command in its release description.
 
@@ -151,8 +151,8 @@ You should also find a `ProviderID` spec on each node.
 
 ## Releases
 
-Relases are not integrated into the CI process. This remains a manual step, as releases via tagging via GitHub tend to be finicky and hard to control precisely.
-Instead there is a release CLI, which ensures that a release is tested, before uploading the tested container image to Quay.io and publishing a new release.
+Releases are not integrated into the CI process. This remains a manual step, as releases via tagging via GitHub tend to be finicky and hard to control precisely.
+Instead, there is a release CLI, which ensures that a release is tested, before uploading the tested container image to Quay.io and publishing a new release.
 
 There are two ways to create a release:
 
@@ -195,5 +195,5 @@ export QUAY_BOT_PASS="..."
 helpers/release create minor
 
 # Create a new minor pre-release for a test branch
-helpers/relese create minor --pre --ref test/branch
+helpers/release create minor --pre --ref test/branch
 ```
