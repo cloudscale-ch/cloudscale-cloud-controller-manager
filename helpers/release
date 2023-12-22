@@ -335,7 +335,8 @@ class ReleaseAPI(BaseModel):
                 ('shasum', '--check', 'image.tar.sha256'), cwd=tempdir)
 
             output = subprocess.check_output(
-                ('docker', 'load', '-i', 'image.tar')).decode('utf-8')
+                ('docker', 'load', '-i', 'image.tar'), cwd=tempdir)\
+                .decode('utf-8')
 
             for line in output.splitlines():
                 if line.startswith('Loaded image: '):
