@@ -91,20 +91,10 @@ See https://github.com/kubernetes/kubernetes/pull/121028
 
 To configure the CCM, the following secret needs to be configured:
 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: cloudscale
-  namespace: kube-system
-stringData:
-  access-token: "..."
-```
-
-Create a file like this named `cloudscale-api-token.yml`, with your token filled in, and run the following:
-
 ```bash
-kubectl apply -f cloudscale-api-token.yml
+kubectl create secret generic cloudscale \
+  --from-literal=access-token='...' \
+  --namespace kube-system
 ```
 
 You can get a token on https://control.cloudscale.ch. Be aware that you need a read/write token. The token should not be deleted while it is in use, so we recommend naming the token accordingly.
