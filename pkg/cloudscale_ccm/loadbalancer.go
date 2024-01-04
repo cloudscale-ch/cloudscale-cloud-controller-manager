@@ -248,6 +248,14 @@ func (l *loadbalancer) EnsureLoadBalancer(
 		return nil, err
 	}
 
+	// Refuse to do anything if there are no nodes
+	if len(nodes) == 0 {
+		return nil, fmt.Errorf(
+			"no valid nodes for service found, please verify there is " +
+				"at least one that allows load balancers",
+		)
+	}
+
 	// Reconcile
 	err := reconcileLbState(ctx, l.lbs.client, func() (*lbState, error) {
 		// Get the desired state from Kubernetes
