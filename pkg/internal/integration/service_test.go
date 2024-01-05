@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -153,7 +154,7 @@ func (s *IntegrationTestSuite) AwaitServiceReady(
 		service = s.ServiceNamed(name)
 		s.Require().NotNil(service)
 
-		if service.Annotations != nil {
+		if len(service.Status.LoadBalancer.Ingress) >= 1 {
 			return service
 		}
 		time.Sleep(1 * time.Second)
@@ -224,6 +225,50 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	s.Assert().NotContains(lines, "Error")
 	s.Assert().NotContains(lines, "warn")
 	s.Assert().NotContains(lines, "Warn")
+}
+
+func (s *IntegrationTestSuite) TestServiceVIPAddresses() {
+
+	// Get the private subnet used by the nodes
+	var subnet string
+	var public string
+
+	servers := s.Servers()
+	s.Require().NotEmpty(servers)
+	for _, iface := range servers[0].Interfaces {
+		if iface.Type == "public" {
+			public = iface.Addresses[0].Address
+			continue
+		}
+
+		subnet = iface.Addresses[0].Subnet.UUID
+		break
+	}
+
+	// Deploy a TCP server that returns something
+	s.T().Log("Creating foo deployment")
+	s.CreateDeployment("nginx", "nginxdemos/hello:plain-text", 2, 80)
+
+	// Expose the deployment using a LoadBalancer service
+	s.ExposeDeployment("nginx", 80, 80, map[string]string{
+		"k8s.cloudscale.ch/loadbalancer-vip-addresses": fmt.Sprintf(
+			`[{"subnet": "%s"}]`, subnet),
+	})
+
+	s.T().Log("Waiting for nginx service to be ready")
+	service := s.AwaitServiceReady("nginx", 180*time.Second)
+	s.Require().NotNil(service)
+
+	// Use a worker as a jumphost to check if we get "foo"
+	addr := service.Status.LoadBalancer.Ingress[0].IP
+
+	cmd := exec.Command(
+		"ssh", fmt.Sprintf("ubuntu@%s", public), "-i", s.sshkey,
+		fmt.Sprintf("curl -s http://%s", addr),
+	)
+	out, err := cmd.Output()
+	s.Require().NoError(err)
+	s.Require().Contains(string(out), "Server name:")
 }
 
 func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
