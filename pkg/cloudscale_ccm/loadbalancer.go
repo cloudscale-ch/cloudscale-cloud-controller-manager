@@ -181,6 +181,20 @@ const (
 	//
 	// Changing this annotation on an established service is considered safe.
 	LoadBalancerListenerTimeoutMemberDataMS = "k8s.cloudscale.ch/loadbalancer-timeout-member-data-ms"
+
+	// LoadBalancerSubnetLimit is a JSON list of subnet UUIDs that the
+	// loadbalancer should use. By default, all subnets of a node are used:
+	//
+	// * `[]` means that anyone is allowed to connect (default).
+	// * `["0769b7cf-199b-4d42-9fbd-9ab3d11d08da"]` only bind to this subnet.
+	//
+	// If set, the limit causes nodes that do not have a matching subnet
+	// to be ignored. If no nodes with matching subnets are found, an
+	// error is returned.
+	//
+	// This is an advanced feature, useful if you have nodes that are in
+	// multiple private subnets.
+	LoadBalancerListenerAllowedSubnets = "k8s.cloudscale.ch/loadbalancer-listener-allowed-subnets"
 )
 
 type loadbalancer struct {

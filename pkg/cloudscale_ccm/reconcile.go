@@ -141,6 +141,12 @@ func desiredLbState(
 		s.pools = append(s.pools, &pool)
 
 		// For each server and private address, we need to add a pool member
+		allowedSubnets, err := serviceInfo.annotationList(
+			LoadBalancerListenerAllowedSubnets)
+		if err != nil {
+			return nil, err
+		}
+
 		for _, server := range servers {
 			for _, iface := range server.Interfaces {
 
@@ -151,6 +157,16 @@ func desiredLbState(
 
 				// Create a pool member for each address
 				for _, addr := range iface.Addresses {
+
+					// Networks without subnets are not supported
+					if addr.Subnet.UUID == "" {
+						continue
+					}
+
+					if len(allowedSubnets) > 0 && !slices.Contains(
+						allowedSubnets, addr.Subnet.UUID) {
+						continue
+					}
 
 					name := poolMemberName(addr.Address, nodePort)
 					s.members[&pool] = append(s.members[&pool],
