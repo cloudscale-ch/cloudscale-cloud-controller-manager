@@ -53,6 +53,74 @@ helpers/cleanup
 
 > :warning: This may incur costs on your side. Clusters that are removed may also leave behind load balancers, if associated services are not removed first. Please look at https://control.cloudscale.ch after cleanup to ensure that everything was removed.
 
+### Node Metadata Example
+
+Once installed, the CCM will enrich nodes with metadata like the following:
+
+```yaml
+metadata:
+  labels:
+    node.kubernetes.io/instance-type: plus-32-16
+    topology.kubernetes.io/region: lpg
+    topology.kubernetes.io/zone: lpg1
+spec:
+  providerID: cloudscale://<server-uuid>
+status:
+  addresses:
+    - address: k8test-worker-1
+      type: Hostname
+    - address: 5.102.148.123
+      type: ExternalIP
+    - address: 2a06:c01:1000:1165::123
+      type: ExternalIP
+    - address: 10.1.1.123
+      type: InternalIP
+```
+
+### LoadBalancer Example
+
+To run a simple loadbalanced service, you can use the following example:
+
+```bash
+kubectl create deployment hello \
+  --image=nginxdemos/hello:plain-text \
+  --replicas=2
+kubectl expose deployment hello \
+  --name=hello \
+  --type=LoadBalancer \
+  --port=80 \
+  --target-port=80 \
+```
+
+Afterward, wait for the external IP to become available:
+
+```bash
+kubectl get service hello --watch
+```
+
+Details and some progress messages are visible here:
+
+```bash
+kubectl describe service hello
+```
+
+To check the CCM log, run the following:
+
+```bash
+kubectl logs -l k8s-app=cloudscale-cloud-controller-manager -n kube-system
+```
+
+Once the external IP is available, you can use it to check the result:
+
+```bash
+$ curl 5.102.148.123
+Server address: 5.102.148.123:80
+Server name: hello-7766f96cd-m7pvk
+Date: 05/Jan/2024:10:20:18 +0000
+URI: /
+Request ID: dbe6be294e3280b6ff3b919abf20e9f9
+```
+
 # Operator Manual
 
 ## Installation
@@ -136,6 +204,32 @@ This taint should be immediately removed by the CCM and the metadata provided by
 You should also find a `ProviderID` spec on each node.
 
 > :warning: These instructions may not be right for your cluster, so be sure to test this in a staging environment.
+
+### LoadBalancer Service Configuration
+
+You can influence the way services of type `LoadBalancer` are created by the CCM. To do so, set annotations on the service resource:
+
+```yaml
+apiversion: v1
+kind: Service
+metadata:
+  annotations:
+    k8s.cloudscale.ch/loadbalancer-listener-allowed-cidrs: '["1.2.3.0/24"]'
+```
+
+The full set of configuration toggles can be found in the [`pkg/cloudscale_ccm/loadbalancer.go`](pkg/cloudscale/ccm/loadbalancer.go) file.
+
+These annotations are all optional as they come with reasonable defaults.
+
+### Preserve Client Source IP
+
+By default, the source IP seen in the target container is not the original source IP of the client.
+
+To change this, see the official Kubernetes documentation:
+
+https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
+
+The mentioned `externalTrafficPolicy: Local` setting on the service spec is fully supported.
 
 # Developer Manual
 
