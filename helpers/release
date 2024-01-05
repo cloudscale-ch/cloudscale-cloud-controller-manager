@@ -74,7 +74,7 @@ class ReleaseAPI(BaseModel):
     # - Contents: Read and Write.
     github_token: str
 
-    # A quay bot username/token with write access to IMAGE_REPO.
+    # A quay username/password tuple with write access to IMAGE_REPO.
     quay_auth: Tuple[str, str]
 
     @cached_property
@@ -416,8 +416,8 @@ class ReleaseAPI(BaseModel):
 @cli.command(name='create')
 def create_command(
     increment: Annotated[Increment, Argument()],
-    quay_bot_user: Annotated[str, Option(envvar='QUAY_BOT_USER')],
-    quay_bot_pass: Annotated[str, Option(envvar='QUAY_BOT_PASS')],
+    quay_user: Annotated[str, Option(envvar='QUAY_USER')],
+    quay_pass: Annotated[str, Option(envvar='QUAY_PASS')],
     github_token: Annotated[str, Option(envvar='GITHUB_TOKEN')],
     pre: Annotated[bool, Option()] = False,
     ref: Annotated[str, Option()] = 'main',
@@ -428,7 +428,7 @@ def create_command(
 
     api = ReleaseAPI(
         github_token=github_token,
-        quay_auth=(quay_bot_user, quay_bot_pass),
+        quay_auth=(quay_user, quay_pass),
     )
 
     try:

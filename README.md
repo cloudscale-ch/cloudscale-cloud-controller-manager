@@ -264,16 +264,16 @@ A fine-grained GitHub access token with the following properties:
 - Commit statuses: Read-Only.
 - Contents: Read and Write.
 
-**`QUAY_BOT_USER` / `QUAY_BOT_PASS`**
+**`QUAY_USER` / `QUAY_PASS`**
 
-Quay bot user with permission to write to the `cloudscalech/cloudscale-cloud-controller-manager` repository on quay.io.
+Quay user with permission to write to the `cloudscalech/cloudscale-cloud-controller-manager` repository on quay.io.
 
 You can then use `helpers/release create` to create a new release:
 
 ```bash
 export GITHUB_TOKEN="github_pat_..."
-export QUAY_BOT_USER="..."
-export QUAY_BOT_PASS="..."
+export QUAY_USER="..."
+export QUAY_PASS="..."
 
 # Create a new minor release of the main branch
 helpers/release create minor
