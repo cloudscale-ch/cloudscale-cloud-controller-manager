@@ -27,12 +27,16 @@ func TestInstanceExists(t *testing.T) {
 		assert.Equal(t, exists, actual)
 	}
 
-	// By name
-	assertExists(true, testkit.NewNode("foo").V1())
-	assertExists(true, testkit.NewNode("bar").V1())
-	assertExists(false, testkit.NewNode("baz").V1())
+	assertError := func(node *v1.Node) {
+		_, err := i.InstanceExists(context.Background(), node)
+		assert.Error(t, err)
+	}
 
-	// Provider id has precedence
+	// Only decide if instances exist if they have a provider id
+	assertError(testkit.NewNode("foo").V1())
+	assertError(testkit.NewNode("bar").V1())
+	assertError(testkit.NewNode("baz").V1())
+
 	assertExists(true, testkit.NewNode("baz").WithProviderID(
 		"cloudscale://5ac4afba-57b3-40d7-b34a-9da7056176fd").V1())
 	assertExists(false, testkit.NewNode("foo").WithProviderID(
@@ -42,9 +46,12 @@ func TestInstanceExists(t *testing.T) {
 func TestInstanceShutdown(t *testing.T) {
 	server := testkit.NewMockAPIServer()
 	server.WithServers([]cloudscale.Server{
-		{Name: "foo", Status: "stopped"},
-		{Name: "bar", Status: "started"},
-		{Name: "baz", Status: "changing"},
+		{UUID: "c2e4aabd-8c91-46da-b069-000000000001",
+			Name: "foo", Status: "stopped"},
+		{UUID: "c2e4aabd-8c91-46da-b069-000000000002",
+			Name: "bar", Status: "started"},
+		{UUID: "c2e4aabd-8c91-46da-b069-000000000003",
+			Name: "baz", Status: "changing"},
 	})
 	server.Start()
 	defer server.Close()
@@ -57,9 +64,22 @@ func TestInstanceShutdown(t *testing.T) {
 		assert.Equal(t, shutdown, actual)
 	}
 
-	assertShutdown(true, testkit.NewNode("foo").V1())
-	assertShutdown(false, testkit.NewNode("bar").V1())
-	assertShutdown(false, testkit.NewNode("baz").V1())
+	assertError := func(node *v1.Node) {
+		_, err := i.InstanceExists(context.Background(), node)
+		assert.Error(t, err)
+	}
+
+	// Only decide if instances are shut down if they have a provider id
+	assertError(testkit.NewNode("foo").V1())
+	assertError(testkit.NewNode("bar").V1())
+	assertError(testkit.NewNode("baz").V1())
+
+	assertShutdown(true, testkit.NewNode("foo").WithProviderID(
+		"cloudscale://c2e4aabd-8c91-46da-b069-000000000001").V1())
+	assertShutdown(false, testkit.NewNode("bar").WithProviderID(
+		"cloudscale://c2e4aabd-8c91-46da-b069-000000000002").V1())
+	assertShutdown(false, testkit.NewNode("baz").WithProviderID(
+		"cloudscale://c2e4aabd-8c91-46da-b069-000000000003").V1())
 
 	// If the node cannot be found, we rather err, than make any statement
 	// about it being shutdown or not (that's the job of InstanceExists)
