@@ -1,6 +1,6 @@
 # Kubernetes Cloud Controller Manager for cloudscale.ch
 
-> :warning: This is currently a work in-progress and not yet ready to be used.
+> :warning: This is currently a preview and not yet read for production
 
 Integrate your Kubernetes cluster with cloudscale.ch infrastructure, with our cloud controller manager (CCM).
 
