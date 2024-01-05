@@ -7,6 +7,10 @@ set -euo pipefail
 
 export ANSIBLE_CONFIG="$PWD"/k8test/ansible.cfg
 export KUBERNETES="${KUBERNETES-latest}"
+export CLUSTER_PREFIX="${CLUSTER_PREFIX-k8test}"
+export SUBNET="${SUBNET-10.100.1.0/24}"
+export LATEST="quay.io/cloudscalech/cloudscale-cloud-controller-manager:latest"
+export IMAGE="${IMAGE-quay.io/cloudscalech/cloudscale-cloud-controller-manager:test}"
 
 # Prepares k8test with an existing virtual env, or a newly created on
 function ensure-k8test() {
@@ -57,7 +61,7 @@ function random-zone() {
 }
 
 # Launches the test cluster, if there's no admin.conf yet
-function ensure-inventory() {
+function ensure-cluster() {
   if ! test -d k8test/cluster; then
     mkdir k8test/cluster
   fi
@@ -67,35 +71,89 @@ function ensure-inventory() {
   fi
  
   if ! test -f k8test/cluster/admin.conf; then
+    zone="$(random-zone)"
+
+    # First create the cluster, without configuring the network
     k8test/playbooks/create-cluster.yml \
-      -e zone="$(random-zone)" \
+      -e zone="$zone" \
       -e ssh_key=k8test/cluster/ssh.pub \
       -e control_count=2 \
       -e worker_count=2 \
       -e kubelet_extra_args='--cloud-provider=external' \
-      -e kubernetes="${KUBERNETES}"
+      -e kubernetes="${KUBERNETES}" \
+      -e cluster_prefix="${CLUSTER_PREFIX}" \
+      -e subnet="${SUBNET}" \
+      --tags setup-vms,setup-controls
 
     # Those won't really change between runs, so update them during install
     k8test/playbooks/update-secrets.yml \
       -i k8test/cluster/inventory.yml
+
+    # Second, get the CCM running. Without it setting the node IPs, Cilium
+    # won't work.
+    update-ccm
+
+    # Finally, setup the cluster to completion
+    k8test/playbooks/create-cluster.yml \
+      -e zone="$zone" \
+      -e ssh_key=k8test/cluster/ssh.pub \
+      -e control_count=2 \
+      -e worker_count=2 \
+      -e kubelet_extra_args='--cloud-provider=external' \
+      -e kubernetes="${KUBERNETES}" \
+      -e cluster_prefix="${CLUSTER_PREFIX}" \
+      -e subnet="${SUBNET}"    
   fi
 }
 
-# Build the latest container each time
-function build-container() {
-  k8test/playbooks/build-container.yml \
+# Build the latest image each time
+function build-image() {
+  k8test/playbooks/build-image.yml \
     -i k8test/cluster/inventory.yml \
     -e dockerfile=./Dockerfile \
-    -e tag=quay.io/cloudscalech/cloudscale-cloud-controller-manager:test \
-    -e extra='--build-arg=VERSION=test'
+    -e tag="$IMAGE" \
+    -e extra='--build-arg=VERSION=test' \
+    -l controls
+}
+
+# Import an image from the host
+function import-image() {
+  k8test/playbooks/import-image.yml \
+    -i k8test/cluster/inventory.yml \
+    -e image="$PWD/image.tar" \
+    -l controls
+}
+
+# Install/update the CCM
+function update-ccm() {
+  # By default, the image is built every time (with the latest changes
+  # in the current directory), but it is also possible to import a pre-built
+  # image (for CI).
+  #
+  # The pre-built image is expected to exist as `image.tar` in the
+  # current directory. It should be created as follows:
+  #
+  # export IMAGE=cloudscale-ccm
+  # export IMAGE_SOURCE=import
+  # docker build --platform=linux/amd64 -t $IMAGE
+  # docker save $IMAGE -o image.tar
+  # run-in-test-cluster
+  #
+  if [[ "${IMAGE_SOURCE-build}" == "build" ]]; then
+    build-image
+  else
+    import-image
+  fi
+
+  apply-resources
 }
 
 # Re-apply the resources each time
 function apply-resources() {
   api_url=$(echo "${CLOUDSCALE_API_URL-https://api.cloudscale.ch}" | sed 's|/v1||g')
 
-  sed 's/controller-manager:latest/controller-manager:test/g' \
-    deploy/kubernetes/releases/latest.yml \
+  sed "s|${LATEST}|${IMAGE}|g" \
+    deploy/latest.yml \
     | sed "s|https://api.cloudscale.ch|${api_url}|g" \
     > /tmp/ccm.yml
 
@@ -104,7 +162,22 @@ function apply-resources() {
   kubectl apply -f /tmp/ccm.yml
 }
 
-ensure-k8test
-ensure-inventory
-build-container
-apply-resources
+# Execute if not sourced
+if [ "${BASH_SOURCE[0]}" -ef "$0" ]; then
+
+  # The image name requires a slash in it, or Podman will add `localhost/` and
+  # confuse Kubernetes.
+  if [[ "$IMAGE" != *"/"* ]]; then
+    echo "\$IMAGE has no slash: $IMAGE"
+    exit 1
+  fi
+
+  first_run=$(test ! -f k8test/cluster/inventory.yml && echo "yes" || echo "no")
+
+  ensure-k8test
+  ensure-cluster
+
+  if [[ "$first_run" == "no" ]]; then
+    update-ccm
+  fi
+fi

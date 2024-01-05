@@ -4,61 +4,166 @@ on:
   push:
     branches:
       - main
+
   pull_request:
 
   # Allow to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+  # Run this regularly, to get integration tests results against new
+  # Kubernetes releases.
+  schedule:
+    - cron: '15 15 * * 5'
+
 permissions:
   contents: read
 
+env:
+  GO_VERSION: 1.21
+
 jobs:
-  Linting:
+  lint:
+    name: "Run Linters"
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: Restore cache
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            ~/.cache/golangci-lint
+            ~/.cache/go-build
+          key: lint-${{ hashFiles('go.mod') }}
 
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.53.3
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.2
 
       - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@2023.1.5
+        run: go install honnef.co/go/tools/cmd/staticcheck@2023.1.6
 
       - name: Run Linter
         run: make lint
 
-  Units:
+      - name: Save cache
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            ~/.cache/golangci-lint
+            ~/.cache/go-build
+          key: lint-${{ hashFiles('go.mod') }}
+
+  unit:
+    name: "Run Unit Tests"
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '${{ env.GO_VERSION }}'
 
       - name: Run Unit Tests
         run: make test
 
-  Integrations:
+  test-matrix:
+    name: "Get Kubernetes Releases"
     runs-on: ubuntu-latest
-    needs: Units
-
-    env:
-      CLOUDSCALE_API_TOKEN: ${{ secrets.CLOUDSCALE_API_TOKEN }}
-
-    # Prevent integration tests from running in parallel.
-    concurrency:
-      group: integration
 
     steps:
       - uses: actions/checkout@v3
+
+      - name: "Generate Test Matrix"
+        id: list
+        run: 'echo "tests=$(helpers/test-matrix)" >> $GITHUB_OUTPUT'
+
+    outputs:
+      tests: ${{ steps.list.outputs.tests }}
+
+  build-image:
+    name: "Build Container Image"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Evaluate image name
+        run: 'helpers/image-from-ref >> $GITHUB_ENV'
+
+      - name: Build image
+        run: 'docker build --platform=linux/amd64 --tag "$IMAGE" .'
+
+      - name: Export image
+        run: 'docker image save "$IMAGE" -o image.tar'
+
+      - name: Store hash
+        run: 'shasum -a 256 image.tar | tee image.tar.sha256'
+
+      - name: Store image
+        uses: actions/upload-artifact@v4
+        with:
+          name: tested-image
+          path: |
+            image.tar
+            image.tar.sha256
+          retention-days: 30d
+
+  integration:
+    name: "Kubernetes ${{ matrix.kubernetes }}"
+    runs-on: ubuntu-latest
+
+    needs:
+      - lint
+      - unit
+      - test-matrix
+      - build-image
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include: "${{ fromJson(needs.test-matrix.outputs.tests) }}"
+
+    env:
+      CLOUDSCALE_API_TOKEN: ${{ secrets.CLOUDSCALE_API_TOKEN }}
+      KUBERNETES: '${{ matrix.kubernetes }}'
+      SUBNET: '${{ matrix.subnet }}'
+      CLUSTER_PREFIX: '${{ matrix.cluster_prefix }}'
+      IMAGE_SOURCE: import
+
+    # Prevent integration tests from running in parallel. Ideally this should
+    # be seuqential, but that won't work due to the following issue:
+    #
+    # https://github.com/orgs/community/discussions/5435
+    #
+    # Instead we ensure that only one integration test per supported version
+    # is run at any given time.
+    concurrency:
+      group: integration-${{ matrix.kubernetes }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Load image
+        uses: actions/download-artifact@v4
+        with:
+          name: tested-image
+
+      - name: Validate hash
+        run: 'shasum --check image.tar.sha256'
+
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '${{ env.GO_VERSION }}'
+
+      - name: Evaluate image name
+        run: 'helpers/image-from-ref >> $GITHUB_ENV'
+
+      - name: Stagger tests
+        run: 'sleep $((RANDOM % 60 + 1))'
 
       - name: Create Test Cluster
         run: helpers/run-in-test-cluster
@@ -68,6 +173,10 @@ jobs:
 
       - name: Run Integration Tests
         run: make integration
+
+      - name: Wait For Kubernetes-Internal Cleanup
+        if: always()
+        run: sleep 30
 
       - name: Destroy Test Cluster
         if: always()

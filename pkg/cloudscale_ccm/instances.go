@@ -21,6 +21,17 @@ type instances struct {
 func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 	bool, error) {
 
+	// When a node does not have a ProviderID, return an err. `InstanceExists`
+	// is used by the node lifecycle controller to decide if a `NotReady`
+	// node can be removed and names are too weak of an association to say for
+	// sure.
+	//
+	// This should not really happen anyway, since the node will be enriched
+	// with a ProviderID as soon as it joins, but better safe than sorry.
+	if node.Spec.ProviderID == "" {
+		return false, fmt.Errorf("node %s has no ProviderID", node.Name)
+	}
+
 	server, err := i.srv.findByNode(ctx, node).AtMostOne()
 
 	if err != nil {
@@ -49,6 +60,10 @@ func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 // node in the cloud provider.
 func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (
 	bool, error) {
+
+	if node.Spec.ProviderID == "" {
+		return false, fmt.Errorf("node %s has no ProviderID", node.Name)
+	}
 
 	server, err := i.srv.findByNode(ctx, node).One()
 

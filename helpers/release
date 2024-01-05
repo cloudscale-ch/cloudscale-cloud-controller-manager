@@ -1,0 +1,484 @@
+#!/usr/bin/env python3
+import click
+import requests
+import subprocess
+import sys
+import tempfile
+import textwrap
+
+from enum import Enum
+from functools import cached_property
+from github import Github
+from github.Artifact import Artifact
+from github.Commit import Commit
+from github.GitRelease import GitRelease
+from github.GithubException import UnknownObjectException
+from github.Repository import Repository
+from github.WorkflowRun import WorkflowRun
+from io import BytesIO
+from pathlib import Path
+from pydantic import BaseModel
+from semver import Version
+from sys import stderr
+from typer import Argument
+from typer import Option
+from typer import Typer
+from typing import Annotated
+from typing import IO
+from typing import Iterator
+from typing import Optional
+from typing import Tuple
+from zipfile import ZipFile
+
+
+# The source repository on GitHub
+GIT_REPO = 'cloudscale-ch/cloudscale-cloud-controller-manager'
+
+# The container repository on Quay.io
+IMAGE_REPO = 'cloudscalech/cloudscale-cloud-controller-manager'
+
+
+cli = Typer(add_completion=False)
+
+
+class Increment(str, Enum):
+    """ The kinds of version bumps that are supported. """
+
+    major = "major"
+    minor = "minor"
+    patch = "patch"
+
+
+class ReleaseError(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__()
+        self.message = message
+
+
+class FlightCheckError(BaseModel):
+
+    # Whether the error can be overruled using '--force'
+    skippable: bool
+
+    # The description of the error
+    message: str
+
+
+class ReleaseAPI(BaseModel):
+    """ Wraps access to GitHub and Quay.io with helper methods and caches. """
+
+    # A fine-grained GitHub access token with the following properties:
+    # - Limited to the GIT_REPO repository.
+    # - Actions: Read-Only.
+    # - Commit statuses: Read-Only.
+    # - Contents: Read and Write.
+    github_token: str
+
+    # A quay username/password tuple with write access to IMAGE_REPO.
+    quay_auth: Tuple[str, str]
+
+    @cached_property
+    def api(self) -> Github:
+        return Github(self.github_token)
+
+    @cached_property
+    def repository(self) -> Repository:
+        return self.api.get_repo(GIT_REPO)
+
+    @cached_property
+    def versions(self) -> list[Version]:
+        versions = []
+
+        for release in self.repository.get_releases():
+            try:
+                versions.append(Version.parse(release.tag_name))
+            except ValueError:
+                print(f"[Warning] Not semver: {release.html_url}", file=stderr)
+
+        versions.sort()
+        return versions
+
+    @cached_property
+    def image_tags(self) -> list[str]:
+        r = requests.get(f'https://quay.io/api/v1/repository/{IMAGE_REPO}/tag')
+        r.raise_for_status()
+
+        return [t['name'] for t in r.json()['tags'] if 'end_ts' not in t]
+
+    def resolve_ref(self, ref: str) -> Commit:
+        return self.repository.get_commit(ref)
+
+    def has_release(self, commit: Commit) -> bool:
+        for release in self.repository.get_releases():
+            if release.target_commitish == commit.sha:
+                return True
+
+        return False
+
+    def ensure_latest(self) -> None:
+        releases = list(self.repository.get_releases())
+        latest = None
+        latest_version = None
+
+        for release in releases:
+            if release.prerelease:
+                continue
+
+            try:
+                version = Version.parse(release.tag_name)
+            except ValueError:
+                continue
+
+            if latest is None or version > latest_version:
+                latest = release
+                latest_version = version
+                continue
+
+        if not latest:
+            return
+
+        latest._requester.requestJsonAndCheck(
+            "PATCH", latest.url, input={'make_latest': 'true'})
+
+    def workflow_run(self, commit: Commit) -> WorkflowRun | None:
+        for run in self.repository.get_workflow_runs(head_sha=commit.sha):
+            return run
+
+        return None
+
+    def workflow_image_artifact(self, run: WorkflowRun) -> Artifact | None:
+        for artifact in run.get_artifacts():
+            if artifact.name == 'tested-image':
+                return artifact
+
+        return None
+
+    def next_version(self, old: None | str, inc: Increment, pre: bool) \
+            -> Version:
+
+        match old, self.versions:
+            case None, []:
+                old_version = Version(0, 0, 0)
+            case None, versions:
+                old_version = versions[-1]
+            case old, _ if old is not None:
+                try:
+                    old_version = Version.parse(old)
+                except ValueError:
+                    raise ReleaseError(f"Not a semantic version: '{old}'")
+            case _:
+                raise ReleaseError(f"No next version for {old}")
+
+        if pre and old_version.prerelease:
+            return old_version.bump_prerelease()
+
+        if not pre and old_version.prerelease:
+            return old_version.finalize_version()
+
+        match inc:
+            case Increment.major:
+                new_version = old_version.bump_major()
+            case Increment.minor:
+                new_version = old_version.bump_minor()
+            case Increment.patch:
+                new_version = old_version.bump_patch()
+
+        if pre:
+            new_version = new_version.bump_prerelease()
+
+        return new_version
+
+    def download(self, url: str, output: IO[bytes]) -> None:
+        """ Download the given URL using the GitHub auth token. """
+
+        assert url.startswith('https://api.github.com')
+        headers = {'Authorization': f'token {self.github_token}'}
+
+        with requests.get(url, stream=True, headers=headers) as response:
+            response.raise_for_status()
+
+            for chunk in response.iter_content(chunk_size=8192):
+                output.write(chunk)
+
+    def docker_login(self) -> str:
+        """ Login to quay.io using Docker.
+
+        Returns a non-empty string on error, an empty string on success.
+
+        """
+
+        result = subprocess.run(
+            (
+                'docker', 'login', 'quay.io',
+                '--username', self.quay_auth[0],
+                '--password-stdin'
+            ),
+            input=self.quay_auth[1].encode('utf-8') + b"\n",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        if result.returncode != 0:
+            return result.stderr.decode('utf-8')
+
+        return ""
+
+    def release_config(self, version: Version) -> str:
+        config = Path('deploy/latest.yml').read_text()
+        return config.replace(':latest', f':{version}')
+
+    def release_message(self, version: Version) -> str:
+        repo_url = f'https://github.com/{GIT_REPO}'
+        readme = f'{repo_url}/blob/{version}/README.md'
+
+        return textwrap.dedent(f"""\
+            ## Configuration
+
+            This release can be installed with the following command:
+
+            ```
+            kubectl apply -f {repo_url}/releases/download/{version}/config.yml
+            ```
+
+            Please refer to the [README]({readme}) for detailed instructions.
+        """)
+
+    def preflight_check(self, version: Version, commit: Commit) \
+            -> Iterator[FlightCheckError]:
+        """ Ensures the given version can be released.
+
+        If not, at least one FlightCheckError is yielded.
+
+        """
+
+        # Check if version already exists
+        if version in self.versions:
+            yield FlightCheckError(
+                skippable=True,
+                message=f"{version} already exists as GitHub release")
+
+        # Check if image already exists
+        if str(version) in self.image_tags:
+            yield FlightCheckError(
+                skippable=True,
+                message=f"{version} already exists as container image")
+
+        # Check if commit already has a release
+        if self.has_release(commit):
+            yield FlightCheckError(
+                skippable=True,
+                message=f"{commit.sha} already has a release")
+
+        # Ensure workflow is successful
+        if run := self.workflow_run(commit):
+            if run.conclusion is None:
+                yield FlightCheckError(
+                    skippable=True,
+                    message=f"{run.url} is still pending")
+
+            elif run.conclusion != 'success':
+                yield FlightCheckError(
+                    skippable=True,
+                    message=f"{run.url} unsuccessful: {run.conclusion}")
+
+        else:
+            yield FlightCheckError(
+                skippable=False,
+                message=f"No run for {commit.sha}")
+
+        # Ensure workflow has an image
+        if run and not self.workflow_image_artifact(run):
+            yield FlightCheckError(
+                skippable=False,
+                message=f"{run.url} has no tested-image artifact")
+
+        # Validate we can login to quay.io
+        if err := self.docker_login():
+            yield FlightCheckError(
+                skippable=False,
+                message=f"Could not login to quay.io: {err}")
+
+        # Ensure non-prereleases are in the main branch
+        if not version.prerelease:
+            for c in self.repository.get_commits(sha='main'):
+                if c == commit:
+                    break
+            else:
+                yield FlightCheckError(
+                    skippable=False,
+                    message=f"{commit.sha} is not part of the main branch")
+
+    def create(self, commit: Commit, version: Version, force: bool) \
+            -> GitRelease:
+        """ Creates the release. Assumes pre-flight checks were run. """
+
+        image = f"quay.io/{IMAGE_REPO}:{version}"
+
+        run = self.workflow_run(commit)
+        if not run:
+            raise ReleaseError(f"No run found for {commit.sha}")
+
+        artifact = self.workflow_image_artifact(run)
+        if not artifact:
+            raise ReleaseError(f"No artifact found for {run.url}")
+
+        with tempfile.TemporaryDirectory() as tempdir:
+            zip = Path(tempdir) / 'image.zip'
+
+            with zip.open('wb') as f:
+                self.download(artifact.archive_download_url, f)
+
+            with ZipFile(zip, 'r') as z:
+                z.extractall(tempdir)
+
+            subprocess.check_output(
+                ('shasum', '--check', 'image.tar.sha256'), cwd=tempdir)
+
+            output = subprocess.check_output(
+                ('docker', 'load', '-i', 'image.tar'), cwd=tempdir)\
+                .decode('utf-8')
+
+            for line in output.splitlines():
+                if line.startswith('Loaded image: '):
+                    imported_image = line.removeprefix('Loaded image: ')
+                    break
+            else:
+                raise ReleaseError(
+                    f'Expected "Loaded image: <tag>" in output:\n {output}')
+
+        if err := self.docker_login():
+            raise ReleaseError(f'Docker login failed: {err}')
+
+        subprocess.check_output(('docker', 'tag', imported_image, image))
+        subprocess.check_output(('docker', 'push', image))
+
+        if not version.prerelease:
+            versions = [v for v in self.versions if not v.prerelease]
+            versions.sort()
+
+            if self.versions[-1] <= version:
+                tag = image.replace(f':{version}', ':latest')
+                subprocess.check_output(('docker', 'tag', imported_image, tag))
+                subprocess.check_output(('docker', 'push', tag))
+
+        # Get the release before deleting the tag, or we won't find it
+        try:
+            existing_release = self.repository.get_release(str(version))
+        except UnknownObjectException:
+            existing_release = None
+
+        # Delete the tag without looking (ignore if it does not exist)
+        if force:
+            subprocess.run(
+                ('git', 'tag', '-d', str(version)),
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            subprocess.run(
+                ('git', 'push', 'origin', '--delete', str(version)),
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        subprocess.check_output((
+            'git', 'tag', '-a', str(version),
+            '-m', f"Release {version}",
+            commit.sha), stderr=subprocess.STDOUT)
+
+        subprocess.check_output(
+            ('git', 'push', '--tags'), stderr=subprocess.STDOUT)
+
+        if existing_release and not force:
+            raise ReleaseError(f"A release for {version} already exists")
+        elif existing_release and force:
+            existing_release.delete_release()
+
+        release = self.repository.create_git_release(
+            tag=str(version),
+            name=str(version),
+            message=self.release_message(version),
+            generate_release_notes=True,
+            target_commitish=commit.sha,
+            prerelease=False,
+        )
+
+        self.ensure_latest()
+
+        config = self.release_config(version).encode('utf-8')
+
+        release.upload_asset_from_memory(
+            file_like=BytesIO(config),
+            file_size=len(config),
+            name='config.yml',
+            content_type='text/yaml',
+        )
+
+        return release
+
+
+@cli.command(name='create')
+def create_command(
+    increment: Annotated[Increment, Argument()],
+    quay_user: Annotated[str, Option(envvar='QUAY_USER')],
+    quay_pass: Annotated[str, Option(envvar='QUAY_PASS')],
+    github_token: Annotated[str, Option(envvar='GITHUB_TOKEN')],
+    pre: Annotated[bool, Option()] = False,
+    ref: Annotated[str, Option()] = 'main',
+    force: Annotated[bool, Option()] = False,
+    old_version: Annotated[Optional[str], Option()] = None,
+) -> None:
+    """ Create a new release. """
+
+    api = ReleaseAPI(
+        github_token=github_token,
+        quay_auth=(quay_user, quay_pass),
+    )
+
+    try:
+        print("Running preflight check")
+        new_version = api.next_version(old_version, increment, pre)
+
+        commit = api.resolve_ref(ref)
+        print(f"Commit: {commit.sha}")
+
+        errors = tuple(api.preflight_check(new_version, commit))
+        fatal = sum(1 for e in errors if not e.skippable)
+
+        print('')
+
+        if errors:
+            for err in errors:
+                if not err.skippable:
+                    print("FATAL:", err.message)
+                else:
+                    print("ERROR:", err.message)
+        else:
+            print("Found no errors ✓")
+
+        if errors and not force:
+            sys.exit(1)
+
+        if fatal:
+            sys.exit(1)
+
+        print('')
+
+        if not click.confirm(f"Do you want to release {new_version}?"):
+            sys.exit(1)
+
+        print('')
+
+    except ReleaseError as e:
+        print('ERROR:', e.message)
+        sys.exit(1)
+
+    release = api.create(commit, new_version, force)
+    print("Success:", release.html_url)
+
+
+@cli.command(name='list', hidden=True)
+def list_command() -> None:
+    """ List existing releases """
+
+    raise NotImplementedError()
+
+
+if __name__ == '__main__':
+    cli()
