@@ -18,7 +18,7 @@ For example, if the current release is `1.29.0`, we support the following:
 - `1.28.x`
 - `1.27.x`
 
-Older releases should work as well, but we do not test them automatically and we may decide not to fix bugs related to older releases.
+Older releases should work as well, but we do not test them automatically, and we may decide not to fix bugs related to older releases.
 
 ## Try It Out
 
@@ -41,7 +41,7 @@ kubectl get nodes
 ssh ubuntu@<ip> -i k8test/cluster/ssh
 ```
 
-To cleanup:
+To clean up:
 
 ```bash
 helpers/cleanup
@@ -75,7 +75,7 @@ status:
 
 ### LoadBalancer Example
 
-To run a simple loadbalanced service, you can use the following example:
+To run a simple load balanced service, you can use the following example:
 
 ```bash
 kubectl create deployment hello \
@@ -131,7 +131,7 @@ kubelet --cloud-provider=external
 
 This should be persisted indefinitely, depending on your distribution. Feel free to open an issue if you have trouble locating the right place to do this in your setup.
 
-A cluster created this way **will start all nodes tainted** as follows:
+A cluster created this way **will start with all nodes tainted** as follows:
 
 ```yaml
 node.cloudprovider.kubernetes.io/uninitialized: true
@@ -145,7 +145,7 @@ With Kubernetes 1.29 and above, the nodes do not gain a node IP in Kubernetes, u
 
 This can be problematic for certain network plugins like Cilium, which expect this to exist. You may have to install such plugins after the CCM, or wait for them to heal after the CCM has been installed.
 
-Alternatively you can configure `--node-ips` with `kubectl`, to explicitly set the IPs, but this may cause problems if the IPs set via `kubectl` differ from the IPs determined by the CCM.
+Alternatively, you can configure `--node-ips` with `kubectl`, to explicitly set the IPs, but this may cause problems if the IPs set via `kubectl` differ from the IPs determined by the CCM.
 
 See https://github.com/kubernetes/kubernetes/pull/121028
 
@@ -173,21 +173,21 @@ To install the latest version:
 kubectl apply -f https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager/releases/latest/download/config.yml
 ```
 
-To install a specific version, or to upgrade to a new version, have a look at the [list of releases](https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager/releases).
+To install a specific version, or to upgrade to a new version, take a look at the [list of releases](https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager/releases).
 
 Each release has a version-specific `kubectl apply` command in its release description.
 
 ### Existing Clusters
 
-For existing clusters we recommend the following installation order:
+For existing clusters, we recommend the following installation order:
 
 1. [Storing the API Token](#storing-the-api-token)
 2. [Installing the CCM](#installing-the-ccm)
 3. [Configuring the Cluster](#configuring-the-cluster)
 
-For step three you need to restart the kubelet once on each node (serially).
+For step three, you need to restart the kubelet once on each node (serially).
 
-You can verify that the CCM is running, by having a look at the status of the `cloudscale-cloud-controller-manager` daemonset and its log.
+You can verify that the CCM is running, by taking a look at the status of the `cloudscale-cloud-controller-manager` daemon set and its log.
 
 At this point, `LoadBalancer` service resources can already be used, but the Node metadata will only be updated on the nodes once they have been tainted briefly as follows:
 
@@ -215,7 +215,7 @@ metadata:
 
 The full set of configuration toggles can be found in the [`pkg/cloudscale_ccm/loadbalancer.go`](pkg/cloudscale/ccm/loadbalancer.go) file.
 
-These annotations are all optional as they come with reasonable defaults.
+These annotations are all optional, as they come with reasonable defaults.
 
 ### Preserve Client Source IP
 
