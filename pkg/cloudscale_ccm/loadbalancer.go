@@ -3,10 +3,13 @@ package cloudscale_ccm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/kubeutil"
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
+	"golang.org/x/exp/slices"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
@@ -72,6 +75,33 @@ const (
 	// To change the address it is recommended to create a new service
 	// resources instead.
 	LoadBalancerVIPAddresses = "k8s.cloudscale.ch/loadbalancer-vip-addresses"
+
+	// LoadBalancerFloatingIPs assigns the given Floating IPs to the
+	// load balancer. The expected value is a list of addresses of the
+	// Floating IPs in CIDR notation. For example:
+	//
+	// ["5.102.150.123/32", "2a06:c01::123/128"]
+	//
+	// If any Floating IP address is assigned to multiple services via this
+	// annotation, the CCM will refuse to update the associated services, as
+	// this is considered a serious configuration issue that has to first be
+	// resolved by the operator.
+	//
+	// While the service being handled needs to have a parseable Floating IP
+	// config, the services it is compared to for conflict detection do not.
+	//
+	// Such services are skipped during conflict detection with the goal
+	// of limiting the impact of config parse errors to the service being
+	// processed.
+	//
+	// Floating IPs already assigned to the loadbalancer, but no longer
+	// present in the annotations, stay on the loadbalancer until another
+	// service requests them. This is due to the fact that it is not possible
+	// to unassign Floating IPs to point to nowhere.
+	//
+	// The Floating IPs are only assigned to the LoadBalancer once it has
+	// been fully created.
+	LoadBalancerFloatingIPs = "k8s.cloudscale.ch/loadbalancer-floating-ips"
 
 	// LoadBalancerPoolAlgorithm defines the load balancing algorithm used
 	// by the loadbalancer. See the API documentation for more information:
@@ -279,9 +309,9 @@ func (l *loadbalancer) EnsureLoadBalancer(
 	nodes []*v1.Node,
 ) (*v1.LoadBalancerStatus, error) {
 
-	// Skip if the service is not supported by this CCM
+	// Detect configuration issues and abort if they are found
 	serviceInfo := newServiceInfo(service, clusterName)
-	if supported, err := serviceInfo.isSupported(); !supported {
+	if err := l.ensureValidConfig(ctx, serviceInfo); err != nil {
 		return nil, err
 	}
 
@@ -347,9 +377,9 @@ func (l *loadbalancer) UpdateLoadBalancer(
 	nodes []*v1.Node,
 ) error {
 
-	// Skip if the service is not supported by this CCM
+	// Detect configuration issues and abort if they are found
 	serviceInfo := newServiceInfo(service, clusterName)
-	if supported, err := serviceInfo.isSupported(); !supported {
+	if err := l.ensureValidConfig(ctx, serviceInfo); err != nil {
 		return err
 	}
 
@@ -388,9 +418,9 @@ func (l *loadbalancer) EnsureLoadBalancerDeleted(
 	service *v1.Service,
 ) error {
 
-	// Skip if the service is not supported by this CCM
+	// Detect configuration issues and abort if they are found
 	serviceInfo := newServiceInfo(service, clusterName)
-	if supported, err := serviceInfo.isSupported(); !supported {
+	if err := l.ensureValidConfig(ctx, serviceInfo); err != nil {
 		return err
 	}
 
@@ -400,6 +430,120 @@ func (l *loadbalancer) EnsureLoadBalancerDeleted(
 	}, func() (*lbState, error) {
 		return actualLbState(ctx, &l.lbs, serviceInfo)
 	})
+}
+
+// ensureValidConfig ensures that the configuration can be applied at all,
+// acting as a gate that ensures certain invariants before any changes are
+// made.
+//
+// The general idea is that it's better to not make any chanages if the config
+// is bad, rather than throwing errors later when some changes have already
+// been made.
+func (l *loadbalancer) ensureValidConfig(
+	ctx context.Context, serviceInfo *serviceInfo) error {
+
+	// Skip if the service is not supported by this CCM
+	if supported, err := serviceInfo.isSupported(); !supported {
+		return err
+	}
+
+	// If Floating IPs are used, make sure there are no conflicting
+	// assignment across services.
+	ips, err := l.findIPsAssignedElsewhere(ctx, serviceInfo)
+	if err != nil {
+		return fmt.Errorf("could not parse %s", LoadBalancerFloatingIPs)
+	}
+
+	if len(ips) > 0 {
+
+		info := make([]string, 0, len(ips))
+		for ip, service := range ips {
+			info = append(info, fmt.Sprintf("%s->%s", ip, service))
+		}
+
+		return fmt.Errorf(
+			"at least one Floating IP assigned to service %s is also "+
+				"assigned to another service. Refusing to continue to avoid "+
+				"flapping: %s",
+			serviceInfo.Service.Name,
+			strings.Join(info, ", "),
+		)
+	}
+
+	return nil
+}
+
+// findIPsAssignedElsewhere lists other services and compares their Floating
+// IPs with the ones found on the given service. If an IP is found to be
+// assigned to two services, the IP and the name of the service are returned.
+func (l *loadbalancer) findIPsAssignedElsewhere(
+	ctx context.Context, serviceInfo *serviceInfo) (map[string]string, error) {
+
+	ips, err := serviceInfo.annotationList(LoadBalancerFloatingIPs)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(ips) == 0 {
+		return nil, nil
+	}
+
+	conflicts := make(map[string]string, 0)
+
+	// Unfortuantely, there's no way to filter for the services that matter
+	// here. The only available field selectors for services are
+	// `metadata.name` and `metadata.namespace`.
+	//
+	// To support larger clusters, ensure to not load all services in a
+	// single call.
+	opts := metav1.ListOptions{
+		Continue: "",
+		Limit:    250,
+	}
+
+	svcs := l.k8s.CoreV1().Services("")
+	for {
+		services, err := svcs.List(ctx, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to retrieve services: %w", err)
+		}
+
+		for _, service := range services.Items {
+			if service.Spec.Type != "LoadBalancer" {
+				continue
+			}
+			if service.UID == serviceInfo.Service.UID {
+				continue
+			}
+
+			otherInfo := newServiceInfo(&service, serviceInfo.clusterName)
+			other, err := otherInfo.annotationList(LoadBalancerFloatingIPs)
+
+			// Ignore errors loading the IPs of other services, as they would
+			// not be configured either, if the current service is otherwise
+			// okay, it should be able to continue.
+			//
+			// If this is not done, a single configuration error on a service
+			// causes this function to err on all other services.
+			if err != nil {
+				continue
+			}
+
+			for _, ip := range other {
+				if slices.Contains(ips, ip) {
+					conflicts[ip] = service.Name
+				}
+			}
+		}
+
+		if services.Continue == "" {
+			break
+		}
+
+		opts.Continue = services.Continue
+	}
+
+	return conflicts, nil
 }
 
 // loadBalancerStatus generates the v1.LoadBalancerStatus for the given

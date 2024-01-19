@@ -514,3 +514,24 @@ func TestUpdateMonitorNumberAction(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, Errored, v)
 }
+
+func TestAssignFloatingIPAction(t *testing.T) {
+	server := testkit.NewMockAPIServer()
+	server.On("/v1/floating-ips/100.1.1.1", 201, "{}")
+	server.Start()
+	defer server.Close()
+
+	action := AssignFloatingIP(
+		"100.1.1.1/24", "00000000-0000-0000-0000-000000000000")
+
+	assert.NotEmpty(t, action.Label())
+	v, err := action.Run(context.Background(), server.Client())
+
+	assert.NoError(t, err)
+	assert.Equal(t, Proceed, v)
+
+	var sent cloudscale.FloatingIPUpdateRequest
+	server.LastSent(&sent)
+
+	assert.Equal(t, "00000000-0000-0000-0000-000000000000", sent.LoadBalancer)
+}

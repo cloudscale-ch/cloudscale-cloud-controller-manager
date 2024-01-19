@@ -32,6 +32,9 @@ type lbState struct {
 	// necessarily bound to any given pool.
 	listeners map[*cloudscale.LoadBalancerPool][]cloudscale.
 			LoadBalancerListener
+
+	// The assigned floating IPs
+	floatingIPs []string
 }
 
 func newLbState(lb *cloudscale.LoadBalancer) *lbState {
@@ -44,6 +47,7 @@ func newLbState(lb *cloudscale.LoadBalancer) *lbState {
 			map[*cloudscale.LoadBalancerPool][]cloudscale.LoadBalancerHealthMonitor),
 		listeners: make(
 			map[*cloudscale.LoadBalancerPool][]cloudscale.LoadBalancerListener),
+		floatingIPs: make([]string, 0),
 	}
 }
 
@@ -103,6 +107,14 @@ func desiredLbState(
 			Zone: cloudscale.Zone{Slug: zone},
 		},
 	})
+
+	// Get list of floating IPs if possible
+	ips, err := serviceInfo.annotationList(LoadBalancerFloatingIPs)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse %s", LoadBalancerFloatingIPs)
+	}
+
+	s.floatingIPs = ips
 
 	// Each service port gets its own pool
 	algorithm := serviceInfo.annotation(LoadBalancerPoolAlgorithm)
@@ -295,6 +307,19 @@ func actualLbState(
 		}
 
 		s.listeners[nil] = append(s.listeners[nil], l)
+	}
+
+	// Find all floating IPs assigned to the loadbalancer
+	ips, err := l.client.FloatingIPs.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"lbstate: failed to load floating ips: %w", err)
+	}
+
+	for _, ip := range ips {
+		if ip.LoadBalancer != nil && ip.LoadBalancer.UUID == lb.UUID {
+			s.floatingIPs = append(s.floatingIPs, ip.Network)
+		}
 	}
 
 	return s, nil
@@ -671,6 +696,20 @@ func nextLbActions(
 				))
 			}
 		}
+	}
+
+	// Find the Floating IPs that need to be changed
+	_, assign := compare.Diff(
+		desired.floatingIPs, actual.floatingIPs, func(ip string) string {
+			return ip
+		},
+	)
+
+	for _, ip := range assign {
+		next = append(next, actions.AssignFloatingIP(
+			ip,
+			actual.lb.UUID,
+		))
 	}
 
 	return next, nil

@@ -14,6 +14,7 @@ import (
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/cloudscale_ccm"
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/kubeutil"
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
+	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -154,9 +155,13 @@ func (s *IntegrationTestSuite) AwaitServiceReady(
 		service = s.ServiceNamed(name)
 		s.Require().NotNil(service)
 
-		if len(service.Status.LoadBalancer.Ingress) >= 1 {
-			return service
+		if service.Annotations != nil {
+			uuid := service.Annotations["k8s.cloudscale.ch/loadbalancer-uuid"]
+			if uuid != "" {
+				return service
+			}
 		}
+
 		time.Sleep(1 * time.Second)
 	}
 
@@ -169,14 +174,14 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	start := time.Now()
 
 	// Deploy a TCP server that returns the hostname
-	s.T().Log("Creating hostname deployment")
+	s.T().Log("Creating nginx deployment")
 	s.CreateDeployment("nginx", "nginxdemos/hello:plain-text", 2, 80)
 
 	// Expose the deployment using a LoadBalancer service
 	s.ExposeDeployment("nginx", 80, 80, nil)
 
 	// Wait for the service to be ready
-	s.T().Log("Waiting for hostname service to be ready")
+	s.T().Log("Waiting for nginx service to be ready")
 	service := s.AwaitServiceReady("nginx", 180*time.Second)
 	s.Require().NotNil(service)
 
@@ -379,4 +384,112 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 
 	assertPrefix(addr, &cluster_policy_prefix)
 	assertFastResponses(addr, &cluster_policy_prefix)
+}
+
+func (s *IntegrationTestSuite) TestServiceWithGlobalFloatingIP() {
+	global, err := s.CreateGlobalFloatingIP()
+	s.Require().NoError(err)
+	s.RunTestServiceWithFloatingIP(global)
+}
+
+func (s *IntegrationTestSuite) TestServiceWithRegionalFloatingIP() {
+	regional, err := s.CreateRegionalFloatingIP(s.Region())
+	s.Require().NoError(err)
+	s.RunTestServiceWithFloatingIP(regional)
+}
+
+func (s *IntegrationTestSuite) RunTestServiceWithFloatingIP(
+	fip *cloudscale.FloatingIP) {
+
+	// Deploy a TCP server that returns the hostname
+	s.T().Log("Creating nginx deployment")
+	s.CreateDeployment("nginx", "nginxdemos/hello:plain-text", 2, 80)
+
+	// Expose the deployment using a LoadBalancer service with Floating IP
+	s.ExposeDeployment("nginx", 80, 80, map[string]string{
+		"k8s.cloudscale.ch/loadbalancer-floating-ips": fmt.Sprintf(
+			`["%s"]`, fip.Network),
+	})
+
+	// Wait for the service to be ready
+	s.T().Log("Waiting for nginx service to be ready")
+	service := s.AwaitServiceReady("nginx", 180*time.Second)
+	s.Require().NotNil(service)
+
+	// Ensure that we get responses from two different pods (round-robin)
+	s.T().Log("Verifying hostname service responses")
+	addr := strings.SplitN(fip.Network, "/", 2)[0]
+	responses := make(map[string]int)
+	errors := 0
+	bound := false
+
+	for i := 0; i < 100; i++ {
+		response, err := testkit.HelloNginx(addr, 80)
+
+		// The first 25 requests may err, as the Floating IP has to propagate
+		if err != nil && !bound {
+			continue
+		}
+
+		if err == nil && !bound {
+			s.Assert().LessOrEqual(errors, 25)
+			bound = true
+			errors = 0
+		}
+
+		if err != nil {
+			s.T().Logf("Request %d failed: %s", i, err)
+			errors++
+		}
+
+		if response != nil {
+			s.Assert().NotEmpty(response.ServerName)
+			responses[response.ServerName]++
+		}
+
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Allow for errors, which occurs maybe once in the first 100 requests
+	// to a service, and which does not occur anymore later (even when
+	// running for a long time).
+	s.Assert().LessOrEqual(errors, 1)
+	s.Assert().Len(responses, 2)
+}
+
+func (s *IntegrationTestSuite) TestFloatingIPConflicts() {
+
+	// Create a regional floating IP
+	regional, err := s.CreateRegionalFloatingIP(s.Region())
+	s.Require().NoError(err)
+
+	// Deploy a TCP server that returns the hostname
+	s.T().Log("Creating nginx deployment")
+	s.CreateDeployment("nginx", "nginxdemos/hello:plain-text", 2, 80)
+
+	// Expose the deployment using a LoadBalancer service with Floating IP
+	s.ExposeDeployment("nginx", 80, 80, map[string]string{
+		"k8s.cloudscale.ch/loadbalancer-floating-ips": fmt.Sprintf(
+			`["%s"]`, regional.Network),
+	})
+
+	// Wait for the service to be ready
+	s.T().Log("Waiting for nginx service to be ready")
+	service := s.AwaitServiceReady("nginx", 180*time.Second)
+	s.Require().NotNil(service)
+
+	// Configure a second service with the same floating IP
+	start := time.Now()
+
+	s.ExposeDeployment("service-2", 80, 80, map[string]string{
+		"k8s.cloudscale.ch/loadbalancer-floating-ips": fmt.Sprintf(
+			`["%s"]`, regional.Network),
+	})
+
+	// Wait for a moment before checking the log
+	time.Sleep(5 * time.Second)
+
+	// Ensure the conflict was detected
+	lines := s.CCMLogs(start)
+	s.Assert().Contains(lines, "assigned to another service")
 }

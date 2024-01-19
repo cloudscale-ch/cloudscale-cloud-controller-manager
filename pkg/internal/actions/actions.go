@@ -562,3 +562,31 @@ func (a *UpdateMonitorNumberAction) Run(
 	return ProceedOnSuccess(
 		client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID, &req))
 }
+
+// AssignFloatingIP assigns a Floating IP to the given LoadBalancer UUID
+type AssignFloatingIPAction struct {
+	ip     string
+	lbUUID string
+}
+
+func AssignFloatingIP(ip string, lbUUID string) Action {
+	return &AssignFloatingIPAction{ip: ip, lbUUID: lbUUID}
+}
+
+func (a *AssignFloatingIPAction) Label() string {
+	return fmt.Sprintf("assign-floating-ip(%s -> %s)", a.ip, a.lbUUID)
+}
+
+func (a *AssignFloatingIPAction) Run(
+	ctx context.Context, client *cloudscale.Client) (Control, error) {
+
+	ip := strings.SplitN(a.ip, "/", 2)[0]
+
+	err := client.FloatingIPs.Update(
+		ctx, ip, &cloudscale.FloatingIPUpdateRequest{
+			LoadBalancer: a.lbUUID,
+		},
+	)
+
+	return ProceedOnSuccess(err)
+}

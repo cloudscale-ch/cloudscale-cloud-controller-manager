@@ -1,0 +1,57 @@
+# Deploys the nginxdemos/hello:plain-text container and creates a
+# loadbalancer service for it:
+#
+#     export KUBECONFIG=path/to/kubeconfig
+#     kubectl apply -f nginx-hello.yml
+#
+# Wait for `kubectl describe service hello` to show "Loadbalancer Ensured",
+# then use the IP address found under "LoadBalancer Ingress" to connect to the
+# service.
+#
+# You can also use the following shortcut:
+#
+#     curl http://$(kubectl get service hello -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+#
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+      - name: hello
+        image: nginxdemos/hello:plain-text
+
+      # Spread the containers across nodes
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: hello
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: hello
+  name: hello
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+    name: primary
+  selector:
+    app: hello
+  type: LoadBalancer

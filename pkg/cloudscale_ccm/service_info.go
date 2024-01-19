@@ -86,6 +86,8 @@ func (s serviceInfo) annotation(key string) string {
 		return s.annotationOrDefault(key, "lb-standard")
 	case LoadBalancerVIPAddresses:
 		return s.annotationOrDefault(key, "[]")
+	case LoadBalancerFloatingIPs:
+		return s.annotationOrDefault(key, "[]")
 	case LoadBalancerPoolAlgorithm:
 		return s.annotationOrDefault(key, "round_robin")
 	case LoadBalancerHealthMonitorDelayS:
