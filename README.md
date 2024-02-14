@@ -218,15 +218,227 @@ The full set of configuration toggles can be found in the [`pkg/cloudscale_ccm/l
 
 These annotations are all optional, as they come with reasonable defaults.
 
-### Preserve Client Source IP
+### External Traffic Policy: Local
 
-By default, the source IP seen in the target container is not the original source IP of the client.
+By default, Kubernetes adds an extra hop between load balancer and the pod that handles a packet. The load balancer sends packets to all nodes and the nodes implement balancing using NAT, adding an additional hop.
 
-To change this, see the official Kubernetes documentation:
+In some cases, the extra hop is undesireable or unnecessary. In this case, the external traffic policy can be set to local:
 
-https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
+```yaml
+apiVersion: v1
+kind: Service
+spec:
+  externalTrafficPolicy: Local
+```
 
-The mentioned `externalTrafficPolicy: Local` setting on the service spec is fully supported.
+With this policy, the load balancer only sends traffic to nodes that have at least one of the necessary pods, and Kubernetes will only send traffic to the pods local to the node.
+
+Note that the default value of `Cluster` is generally a good default and changing the external traffic policy to `Local` should only be made if there are clear benefits.
+
+### Client Source IP
+
+Because traffic setup via CCM goes through our load balancers, you do not see the client source IP. To get access to the client's IP, you can configure your service to use the `proxy` or `proxyv2` protocol, which is supported by web servers like [NGINX](https://docs.nginx.com/nginx/admin-guide/load-balancer/using-proxy-protocol/).
+
+```yaml
+apiversion: v1
+kind: Service
+metadata:
+  annotations:
+    k8s.cloudscale.ch/loadbalancer-pool-protocol: proxyv2
+```
+
+See https://kubernetes.io/docs/reference/networking/service-protocols/#protocol-proxy-special
+
+### Impact of Service Changes
+
+The CCM reacts to service changes by changing the load balancer configuration.
+
+Depending on the change, this can have a bigger or a smaller impact. While we try to be as efficient and non-disruptive as possible, we often have to apply generic actions to safely get to the desired state.
+
+What follows is a list of changes that you might want to apply to an existing service, with a description of the expected impact.
+
+You can get detailed information about each annotation here in the [`pkg/cloudscale_ccm/loadbalancer.go`](pkg/cloudscale/ccm/loadbalancer.go) file.
+
+> :warning: We recommend using testing environments and maintenance windows to avoid surprises when changing configuration.
+
+#### No Impact
+
+The following annotations can be changed safely at any time, and should not impact any active or new connections:
+
+- `k8s.cloudscale.ch/loadbalancer-timeout-client-data-ms`
+- `k8s.cloudscale.ch/loadbalancer-timeout-member-connect-ms`
+- `k8s.cloudscale.ch/loadbalancer-timeout-member-data-ms`
+- `k8s.cloudscale.ch/loadbalancer-name` (though we recommend to not change it).
+
+#### Minimal Impact
+
+Changes to the CIDRs is generally safe, but may impact new connections if they do not match the CIDR:
+
+- `k8s.cloudscale.ch/loadbalancer-listener-allowed-cidrs`
+
+Floating IP changes are also safe, but they should be applied with care:
+
+- `k8s.cloudscale.ch/loadbalancer-floating-ips`
+
+Changes to following annotations may lead to new connections timing out until the change is complete:
+
+- `k8s.cloudscale.ch/loadbalancer-health-monitor-delay-s`
+- `k8s.cloudscale.ch/loadbalancer-health-monitor-timeout-s`
+- `k8s.cloudscale.ch/loadbalancer-health-monitor-up-threshold`
+- `k8s.cloudscale.ch/loadbalancer-health-monitor-down-threshold`
+- `k8s.cloudscale.ch/loadbalancer-health-monitor-type`
+- `k8s.cloudscale.ch/loadbalancer-health-monitor-http`
+
+##### Listener Port Changes
+
+Changes to the outward bound service port have a downtime ranging from 15s to 120s, depending on the action. Since the name of the port is used to avoid expensive pool recreation, the impact is minimal if the port name does not change.
+
+For example, the following port 80 to port 8080 change should cause downtime of no more than 15s, as the implicit name of "" is not changed:
+
+<table>
+<thead><tr><th>Before</th><th>After</th></tr></thead>
+<tbody><tr><td>
+
+```yaml
+apiVersion: v1
+kind: Service
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+```
+
+</td>
+<td>
+
+```yaml
+apiVersion: v1
+kind: Service
+spec:
+  ports:
+    - port: 8080
+      protocol: TCP
+      targetPort: 80
+```
+
+</td></tr></tbody></table>
+
+If the name is made explicit, the same rule applies and we should not see downtime of more than 15s:
+
+<table>
+<thead><tr><th>Before</th><th>After</th></tr></thead>
+<tbody><tr><td>
+
+```yaml
+apiVersion: v1
+kind: Service
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+      name: http
+```
+
+</td>
+<td>
+
+```yaml
+apiVersion: v1
+kind: Service
+spec:
+  ports:
+    - port: 8080
+      protocol: TCP
+      targetPort: 80
+      name: http
+```
+
+</td></tr></tbody></table>
+
+Adding and removing ports should also not impact any ports that are unaffected by the change.
+
+However, the following change causes a pool to be recreated and therefore a downtime of 60s-120s is estimated:
+
+<table>
+<thead><tr><th>Before</th><th>After</th></tr></thead>
+<tbody><tr><td>
+
+```yaml
+apiVersion: v1
+kind: Service
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+      name: http
+```
+
+</td>
+<td>
+
+```yaml
+apiVersion: v1
+kind: Service
+spec:
+  ports:
+    - port: 443
+      protocol: TCP
+      targetPort: 80
+      name: https
+```
+
+</td></tr></tbody></table>
+
+Smae goes for this change, where the default name of "" is changed. This is the most surprising example and underscores why it is generally a good idea to plan some maintenance, even if the expected impact is minor:
+
+<table>
+<thead><tr><th>Before</th><th>After</th></tr></thead>
+<tbody><tr><td>
+
+```yaml
+apiVersion: v1
+kind: Service
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+```
+
+</td>
+<td>
+
+```yaml
+apiVersion: v1
+kind: Service
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+      name: http
+```
+
+</td></tr></tbody></table>
+
+#### Considerable Impact
+
+Changes to the following annotations causes pools to be recreated and cause an estimated downtime of 60s-120s.
+
+- `k8s.cloudscale.ch/loadbalancer-pool-algorithm`
+- `k8s.cloudscale.ch/loadbalancer-pool-protocol`
+- `k8s.cloudscale.ch/loadbalancer-listener-allowed-subnets`
+
+#### Major Impact
+
+Changes to the following annotations are not allowed by the CCM and can only be implemented by deleting and re-creating the service. This is due to the fact that these changes would cause a load balancer to be re-created, causing major downtime and the loss of the currently associated IP address (with the exception of the Floating IP):
+
+- `k8s.cloudscale.ch/loadbalancer-flavor` (may be supported in the future).
+- `k8s.cloudscale.ch/loadbalancer-zone`
+- `k8s.cloudscale.ch/loadbalancer-vip-addresses`
 
 # Developer Manual
 
