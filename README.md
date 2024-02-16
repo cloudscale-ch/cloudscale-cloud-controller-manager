@@ -85,7 +85,7 @@ kubectl expose deployment hello \
   --name=hello \
   --type=LoadBalancer \
   --port=80 \
-  --target-port=80 \
+  --target-port=80
 ```
 
 Afterward, wait for the external IP to become available:
@@ -233,7 +233,7 @@ spec:
 
 With this policy, the load balancer only sends traffic to nodes that have at least one of the necessary pods, and Kubernetes will only send traffic to the pods local to the node.
 
-Note that the default value of `Cluster` is generally a good default and changing the external traffic policy to `Local` should only be made if there are clear benefits.
+This is accomplished by an additional health monitor added by the CCM, which checks a `/livez` endpoint provided by the node. If the endpoint returns an HTTP 200, at least one targeted pod is available on the node.
 
 ### Client Source IP
 
@@ -392,7 +392,7 @@ spec:
 
 </td></tr></tbody></table>
 
-Smae goes for this change, where the default name of "" is changed. This is the most surprising example and underscores why it is generally a good idea to plan some maintenance, even if the expected impact is minor:
+Same goes for this change, where the default name of "" is changed. This is the most surprising example and underscores why it is generally a good idea to plan some maintenance, even if the expected impact is minor:
 
 <table>
 <thead><tr><th>Before</th><th>After</th></tr></thead>
@@ -431,6 +431,8 @@ Changes to the following annotations causes pools to be recreated and cause an e
 - `k8s.cloudscale.ch/loadbalancer-pool-algorithm`
 - `k8s.cloudscale.ch/loadbalancer-pool-protocol`
 - `k8s.cloudscale.ch/loadbalancer-listener-allowed-subnets`
+
+Additionally, changes to `spec.externalTrafficPolicy` have the same effect.
 
 #### Major Impact
 
