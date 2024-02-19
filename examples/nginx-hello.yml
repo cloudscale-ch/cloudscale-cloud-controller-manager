@@ -30,15 +30,6 @@ spec:
       containers:
       - name: hello
         image: nginxdemos/hello:plain-text
-
-      # Spread the containers across nodes
-      topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: DoNotSchedule
-        labelSelector:
-          matchLabels:
-            app: hello
 ---
 apiVersion: v1
 kind: Service
