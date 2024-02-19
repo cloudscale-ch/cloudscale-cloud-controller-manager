@@ -1,6 +1,6 @@
 module github.com/cloudscale-ch/cloudscale-cloud-controller-manager
 
-go 1.21
+go 1.22
 
 // https://github.com/kubernetes/apiserver/issues/97
 replace github.com/google/cel-go => github.com/google/cel-go v0.17.7
@@ -18,6 +18,7 @@ require (
 	github.com/cloudscale-ch/cloudscale-go-sdk/v4 v4.0.0
 	github.com/google/uuid v1.5.0
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	k8s.io/client-go v0.29.0
 )
 
@@ -85,7 +86,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/crypto v0.17.0 // indirect
-	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc // indirect
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
