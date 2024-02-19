@@ -42,7 +42,7 @@ spec:
   - port: 80
     protocol: TCP
     targetPort: 80
-    name: primary
+    name: http
   selector:
     app: hello
   type: LoadBalancer

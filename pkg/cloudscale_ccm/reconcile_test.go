@@ -13,8 +13,9 @@ import (
 )
 
 func TestPoolName(t *testing.T) {
-	assert.Equal(t, "tcp/80", poolName(v1.ProtocolTCP, 80))
-	assert.Equal(t, "udp/443", poolName(v1.ProtocolUDP, 443))
+	assert.Equal(t, "tcp", poolName(v1.ProtocolTCP, ""))
+	assert.Equal(t, "udp/foo", poolName(v1.ProtocolUDP, "foo"))
+	assert.Equal(t, "udp/FOO", poolName(v1.ProtocolUDP, "FOO"))
 }
 
 func TestPoolMemberName(t *testing.T) {
@@ -126,11 +127,13 @@ func TestDesiredService(t *testing.T) {
 			Protocol: "TCP",
 			Port:     80,
 			NodePort: 8080,
+			Name:     "http",
 		},
 		{
 			Protocol: "TCP",
 			Port:     443,
 			NodePort: 8443,
+			Name:     "https",
 		},
 	}
 
@@ -143,10 +146,10 @@ func TestDesiredService(t *testing.T) {
 
 	// Have one pool per service port
 	assert.Len(t, desired.pools, 2)
-	assert.Equal(t, desired.pools[0].Name, "tcp/80")
+	assert.Equal(t, desired.pools[0].Name, "tcp/http")
 	assert.Equal(t, desired.pools[0].Protocol, "tcp")
 	assert.Equal(t, desired.pools[0].Algorithm, "round_robin")
-	assert.Equal(t, desired.pools[1].Name, "tcp/443")
+	assert.Equal(t, desired.pools[1].Name, "tcp/https")
 	assert.Equal(t, desired.pools[0].Protocol, "tcp")
 	assert.Equal(t, desired.pools[0].Algorithm, "round_robin")
 

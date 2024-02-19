@@ -146,7 +146,7 @@ func desiredLbState(
 		}
 
 		pool := cloudscale.LoadBalancerPool{
-			Name:      poolName(port.Protocol, port.Port),
+			Name:      poolName(port.Protocol, port.Name),
 			Algorithm: algorithm,
 			Protocol:  protocol,
 		}
@@ -954,10 +954,20 @@ func (l *lbState) poolsByName() map[string]*cloudscale.LoadBalancerPool {
 // poolName produces the name of the pool for the given service port (the port
 // that is bound on the load balancer and reachable from outside of it).
 //
+// We use the name of the port (may be empty, but is enforced to be unqiue
+// for each service).
+//
 // Warning: This named is used to compare desired pools to actual pools.
 // Any change to it causes pools to be rebuilt, which must be avoided!
-func poolName(protocol v1.Protocol, port int32) string {
-	return strings.ToLower(fmt.Sprintf("%s/%d", protocol, port))
+func poolName(protocol v1.Protocol, name string) string {
+	p := strings.ToLower(string(protocol))
+
+	// By default, the port has no name (required with more than 1 port)
+	if name == "" {
+		return p
+	}
+
+	return fmt.Sprintf("%s/%s", p, name)
 }
 
 // poolMemberName produces the name of the pool member for the given node
