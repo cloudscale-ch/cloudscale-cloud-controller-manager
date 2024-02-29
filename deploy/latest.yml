@@ -131,6 +131,8 @@ spec:
         - key: "node.cloudprovider.kubernetes.io/uninitialized"
           value: "true"
           effect: "NoSchedule"
+        - key: "node.kubernetes.io/not-ready"
+          effect: "NoSchedule"
       hostNetwork: true
       containers:
         - name: cloudscale-cloud-controller-manager
