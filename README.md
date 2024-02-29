@@ -1,7 +1,5 @@
 # Kubernetes Cloud Controller Manager for cloudscale.ch
 
-> :warning: This is currently a preview and not yet ready for production.
-
 Integrate your Kubernetes cluster with cloudscale.ch infrastructure, with our cloud controller manager (CCM).
 
 - Automatically provisions load balancers for [`LoadBalancer` services](https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer).
