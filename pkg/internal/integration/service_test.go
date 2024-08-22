@@ -6,7 +6,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/netip"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -16,14 +18,23 @@ import (
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
 	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v4"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func (s *IntegrationTestSuite) CreateDeployment(
 	name string, image string, replicas int32, port int32, args ...string) {
+
+	var command []string
+
+	if len(args) > 0 {
+		command = args[:1]
+		args = args[1:]
+	}
 
 	spec := appsv1.DeploymentSpec{
 		Replicas: &replicas,
@@ -41,9 +52,10 @@ func (s *IntegrationTestSuite) CreateDeployment(
 			Spec: v1.PodSpec{
 				Containers: []v1.Container{
 					{
-						Name:  name,
-						Image: image,
-						Args:  args,
+						Name:    name,
+						Image:   image,
+						Command: command,
+						Args:    args,
 						Ports: []v1.ContainerPort{
 							{ContainerPort: port},
 						},
@@ -82,19 +94,105 @@ func (s *IntegrationTestSuite) ExposeDeployment(
 		},
 	}
 
-	_, err := s.k8s.CoreV1().Services(s.ns).Create(
-		context.Background(),
-		&v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        name,
-				Annotations: annotations,
+	service, err := s.k8s.CoreV1().Services(s.ns).Get(
+		context.Background(), name, metav1.GetOptions{},
+	)
+
+	if err != nil {
+		_, err = s.k8s.CoreV1().Services(s.ns).Create(
+			context.Background(),
+			&v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        name,
+					Annotations: annotations,
+				},
+				Spec: spec,
 			},
-			Spec: spec,
+			metav1.CreateOptions{},
+		)
+		s.Require().NoError(err)
+	} else {
+		service.Spec = spec
+		service.ObjectMeta.Annotations = annotations
+
+		_, err = s.k8s.CoreV1().Services(s.ns).Update(
+			context.Background(),
+			service,
+			metav1.UpdateOptions{},
+		)
+		s.Require().NoError(err)
+	}
+}
+
+// RunJob starts a single job and then awaits the result, returing it as string
+func (s *IntegrationTestSuite) RunJob(
+	image string, timeout time.Duration, cmd ...string) string {
+
+	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	name := fmt.Sprintf("job-%08x", rand.Uint32())
+
+	// Specify the job
+	spec := batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
 		},
+		Spec: batchv1.JobSpec{
+			Template: v1.PodTemplateSpec{
+				Spec: v1.PodSpec{
+					RestartPolicy: v1.RestartPolicyNever,
+					Containers: []v1.Container{
+						{
+							Name:    name,
+							Image:   image,
+							Command: cmd,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Start it
+	_, err := s.k8s.BatchV1().Jobs(s.ns).Create(
+		ctx,
+		&spec,
 		metav1.CreateOptions{},
 	)
 
 	s.Require().NoError(err)
+
+	// Wait for completion
+	var job *batchv1.Job
+	err = wait.PollUntilContextTimeout(ctx, 1*time.Second, timeout, true,
+		func(ctx context.Context) (bool, error) {
+			job, err = s.k8s.BatchV1().Jobs(s.ns).Get(
+				ctx, name, metav1.GetOptions{})
+
+			if err != nil {
+				return false, err
+			}
+			return job.Status.Succeeded > 0, nil
+		},
+	)
+
+	s.Require().NoError(err)
+
+	// Get pod
+	pods, err := s.k8s.CoreV1().Pods(s.ns).List(
+		ctx, metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("job-name=%s", name),
+		},
+	)
+
+	s.Require().NoError(err)
+	s.Require().Len(pods.Items, 1)
+
+	logs, err := s.k8s.CoreV1().Pods(s.ns).GetLogs(
+		pods.Items[0].Name, &v1.PodLogOptions{}).Do(ctx).Raw()
+
+	s.Require().NoError(err)
+
+	return string(logs)
 }
 
 // CCMLogs returns all the logs of the CCM since the given time.
@@ -492,4 +590,99 @@ func (s *IntegrationTestSuite) TestFloatingIPConflicts() {
 	// Ensure the conflict was detected
 	lines := s.CCMLogs(start)
 	s.Assert().Contains(lines, "assigned to another service")
+}
+
+func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
+
+	// Get the branch to run http-echo with (in the future, we might
+	// offer this in a separate container).
+	branch := os.Getenv("HTTP_ECHO_BRANCH")
+	if len(branch) == 0 {
+		branch = "main"
+	}
+
+	// Deploy our http-echo server to check for proxy connections
+	s.T().Log("Creating http-echo deployment", "branch", branch)
+	s.CreateDeployment("http-echo", "golang", 2, 80, "bash", "-c", fmt.Sprintf(`
+  		git clone https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager ccm;
+	  	cd ccm;
+  		git checkout %s || exit 1;
+  		cd cmd/http-echo;
+  		go run main.go -host 0.0.0.0 -port 80
+	`, branch))
+
+	// Expose the deployment using a LoadBalancer service
+	s.ExposeDeployment("http-echo", 80, 80, map[string]string{
+		"k8s.cloudscale.ch/loadbalancer-pool-protocol": "proxy",
+
+		// Make sure to get the default behavior of older Kubernetes releases,
+		// even on newer releases.
+		"k8s.cloudscale.ch/loadbalancer-ip-mode": "VIP",
+	})
+
+	// Wait for the service to be ready
+	s.T().Log("Waiting for http-echo service to be ready")
+	service := s.AwaitServiceReady("http-echo", 180*time.Second)
+	s.Require().NotNil(service)
+
+	addr := service.Status.LoadBalancer.Ingress[0].IP
+	url := fmt.Sprintf("http://%s/proxy-protocol/used", addr)
+
+	// Wait for respones to work
+	s.T().Log("Waiting for http-echo responses")
+	errors := 0
+
+	for i := 0; i < 100; i++ {
+		_, err := testkit.HTTPRead(url)
+
+		if err == nil {
+			break
+		} else {
+			s.T().Logf("Request %d failed: %s", i, err)
+			errors++
+		}
+
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Make sure our HTTP requests get wrapped in the PROXY protocol
+	s.T().Log("Testing PROXY protocol from outside")
+
+	used, err := testkit.HTTPRead(url)
+	s.Assert().NoError(err)
+	s.Assert().Equal("true\n", used)
+
+	// Sending a request from inside the cluster does not work, unless we
+	// use a workaround.
+	s.T().Log("Testing PROXY protocol from inside")
+	used = s.RunJob("curlimages/curl", 90*time.Second, "curl", "-s", url)
+	s.Assert().Equal("false\n", used)
+
+	// The workaround works by using an IP that needs to be reolved via name
+	s.ExposeDeployment("http-echo", 80, 80, map[string]string{
+		"k8s.cloudscale.ch/loadbalancer-pool-protocol": "proxy",
+		"k8s.cloudscale.ch/loadbalancer-ip-mode":       "VIP",
+		"k8s.cloudscale.ch/loadbalancer-force-hostname": fmt.Sprintf(
+			"%s.cust.cloudscale.ch",
+			strings.ReplaceAll(addr, ".", "-"),
+		),
+	})
+
+	s.T().Log("Testing PROXY protocol from inside with workaround")
+	used = s.RunJob("curlimages/curl", 90*time.Second, "curl", "-s", url)
+	s.Assert().Equal("true\n", used)
+
+	// On newer Kubernetes releases, the defaults just work
+	newer, err := kubeutil.IsKubernetesReleaseOrNewer(s.k8s, 1, 30)
+	s.Assert().NoError(err)
+
+	if newer {
+		s.ExposeDeployment("http-echo", 80, 80, map[string]string{
+			"k8s.cloudscale.ch/loadbalancer-pool-protocol": "proxy",
+		})
+
+		s.T().Log("Testing PROXY protocol on newer Kubernetes releases")
+		used = s.RunJob("curlimages/curl", 90*time.Second, "curl", "-s", url)
+		s.Assert().Equal("true\n", used)
+	}
 }
