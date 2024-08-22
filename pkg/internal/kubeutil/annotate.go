@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
@@ -128,4 +129,31 @@ func PatchServiceExternalTrafficPolicy(
 	}
 
 	return PatchService(ctx, client, service, operations)
+}
+
+// IsKubernetesReleaseOrNewer fetches the Kubernetes release and returns
+// true if matches the given major.minor release, or is newer.
+func IsKubernetesReleaseOrNewer(
+	client kubernetes.Interface,
+	major int,
+	minor int,
+) (bool, error) {
+	release, err := client.Discovery().ServerVersion()
+	if err != nil {
+		return false, fmt.Errorf("failed to read kubernetes version: %w", err)
+	}
+
+	k8sMajor, err := strconv.Atoi(release.Major)
+	if err != nil {
+		return false, fmt.Errorf(
+			"failed to convert '%s' to int: %w", release.Major, err)
+	}
+
+	k8sMinor, err := strconv.Atoi(release.Minor)
+	if err != nil {
+		return false, fmt.Errorf(
+			"failed to convert '%s' to int: %w", release.Minor, err)
+	}
+
+	return k8sMajor > major || (k8sMajor == major && k8sMinor >= minor), nil
 }

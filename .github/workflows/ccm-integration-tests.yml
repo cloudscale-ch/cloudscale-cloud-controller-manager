@@ -129,6 +129,7 @@ jobs:
 
     env:
       CLOUDSCALE_API_TOKEN: ${{ secrets.CLOUDSCALE_API_TOKEN }}
+      HTTP_ECHO_BRANCH: ${{ vars.HTTP_ECHO_BRANCH }}
       KUBERNETES: '${{ matrix.kubernetes }}'
       SUBNET: '${{ matrix.subnet }}'
       CLUSTER_PREFIX: '${{ matrix.cluster_prefix }}'

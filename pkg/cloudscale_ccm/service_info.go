@@ -82,6 +82,10 @@ func (s serviceInfo) annotation(key string) string {
 		return s.annotationOrDefault(key, "")
 	case LoadBalancerPoolProtocol:
 		return s.annotationOrDefault(key, "tcp")
+	case LoadBalancerForceHostname:
+		return s.annotationOrDefault(key, "")
+	case LoadBalancerIPMode:
+		return s.annotationOrDefault(key, "Proxy")
 	case LoadBalancerFlavor:
 		return s.annotationOrDefault(key, "lb-standard")
 	case LoadBalancerVIPAddresses:
