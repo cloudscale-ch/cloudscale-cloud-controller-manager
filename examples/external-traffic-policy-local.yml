@@ -4,7 +4,7 @@
 #     export KUBECONFIG=path/to/kubeconfig
 #     kubectl apply -f external-traffic-policy-local.yml
 #
-# Wait for `kubectl describe service hello` to show "Loadbalancer Ensured",
+# Wait for `kubectl describe service local-hello` to show "Loadbalancer Ensured",
 # then use the IP address found under "LoadBalancer Ingress" to connect to the
 # service.
 #
