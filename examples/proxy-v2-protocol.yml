@@ -14,7 +14,7 @@
 #     curl http://$(kubectl get service proxy-hello -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 #
 # If you follow the nginx log, you will see that nginx sees the original source
-# IP address as source of requests (also not the nginx config injected using
+# IP address as source of requests (also note the nginx config injected using
 # config maps):
 #
 #     kubectl logs -l "app=proxy-hello"
