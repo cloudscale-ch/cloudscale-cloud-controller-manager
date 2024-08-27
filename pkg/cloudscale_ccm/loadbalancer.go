@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 )
 
 // Annotations used by the loadbalancer integration of cloudscale_ccm. Those
@@ -132,6 +133,60 @@ const (
 	// Changing the pool protocol on an established service causes downtime,
 	// as all pools have to be recreated.
 	LoadBalancerPoolProtocol = "k8s.cloudscale.ch/loadbalancer-pool-protocol"
+
+	// LoadBalancerForceHostname forces the CCM to report a specific hostname
+	// to Kubernetes when returning the loadbalancer status, instead of
+	// reporting the IP address(es).
+	//
+	// The hostname used should point to the same IP address that would
+	// otherwise be reported. This is used as a workaround for clusters that
+	// do not support status.loadBalancer.ingress.ipMode, and use `proxy` or
+	// `proxyv2` protocol.
+	//
+	// For newer clusters, .status.loadBalancer.ingress.ipMode is automatically
+	// set to "Proxy", unless LoadBalancerIPMode is set to "VIP"
+	//
+	// For more information about this workaround see
+	// https://kubernetes.io/blog/2023/12/18/kubernetes-1-29-feature-loadbalancer-ip-mode-alpha/
+	//
+	// To illustrate, here's an example of a load balancer status shown on
+	// a Kubernetes 1.29 service with default settings:
+	//
+	//    apiVersion: v1
+	//    kind: Service
+	//    ...
+	//    status:
+	//      loadBalancer:
+	//        ingress:
+	//          - ip: 45.81.71.1
+	//          - ip: 2a06:c00::1
+	//
+	// Using the annotation causes the status to use the given value instead:
+	//
+	//    apiVersion: v1
+	//    kind: Service
+	//    metadata:
+	//      annotations:
+	//        k8s.cloudscale.ch/loadbalancer-force-hostname: example.org
+	//    status:
+	//      loadBalancer:
+	//        ingress:
+	//          - hostname: example.org
+	//
+	// If you are not using the `proxy` or `proxyv2` protocol, or if you are
+	// on Kubernetes 1.30 or newer, you probly do not need this setting.
+	//
+	// See `LoadBalancerIPMode` below.
+	LoadBalancerForceHostname = "k8s.cloudscale.ch/loadbalancer-force-hostname"
+
+	// LoadBalancerIPMode defines the IP mode reported to Kubernetes for the
+	// loadbalancers managed by this CCM. It defaults to "Proxy", where all
+	// traffic destined to the load balancer is sent through the load balancer,
+	// even if coming from inside the cluster.
+	//
+	// The older behavior, where traffic inside the cluster is directly
+	// sent to the backend service, can be activated by using "VIP" instead.
+	LoadBalancerIPMode = "k8s.cloudscale.ch/loadbalancer-ip-mode"
 
 	// LoadBalancerHealthMonitorDelayS is the delay between two successive
 	// checks, in seconds. Defaults to 2.
@@ -269,7 +324,13 @@ func (l *loadbalancer) GetLoadBalancer(
 		return nil, false, nil
 	}
 
-	return loadBalancerStatus(instance), true, nil
+	result, err := l.loadBalancerStatus(serviceInfo, instance)
+	if err != nil {
+		return nil, true, fmt.Errorf(
+			"unable to get load balancer state for %s: %w", service.Name, err)
+	}
+
+	return result, true, nil
 }
 
 // GetLoadBalancerName returns the name of the load balancer. Implementations
@@ -361,7 +422,13 @@ func (l *loadbalancer) EnsureLoadBalancer(
 			"unable to annotate service %s: %w", service.Name, err)
 	}
 
-	return loadBalancerStatus(actual.lb), nil
+	result, err := l.loadBalancerStatus(serviceInfo, actual.lb)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"unable to get load balancer state for %s: %w", service.Name, err)
+	}
+
+	return result, nil
 }
 
 // UpdateLoadBalancer updates hosts under the specified load balancer.
@@ -430,6 +497,53 @@ func (l *loadbalancer) EnsureLoadBalancerDeleted(
 	}, func() (*lbState, error) {
 		return actualLbState(ctx, &l.lbs, serviceInfo)
 	})
+}
+
+// loadBalancerStatus generates the v1.LoadBalancerStatus for the given
+// loadbalancer, as required by Kubernetes.
+func (l *loadbalancer) loadBalancerStatus(
+	serviceInfo *serviceInfo,
+	lb *cloudscale.LoadBalancer,
+) (*v1.LoadBalancerStatus, error) {
+
+	status := v1.LoadBalancerStatus{}
+
+	// When forcing the use of a hostname, there's exactly one ingress item
+	hostname := serviceInfo.annotation(LoadBalancerForceHostname)
+	if len(hostname) > 0 {
+		status.Ingress = []v1.LoadBalancerIngress{{Hostname: hostname}}
+		return &status, nil
+	}
+
+	// Otherwise there as many items as there are addresses
+	status.Ingress = make([]v1.LoadBalancerIngress, len(lb.VIPAddresses))
+
+	var ipmode *v1.LoadBalancerIPMode
+	switch serviceInfo.annotation(LoadBalancerIPMode) {
+	case "Proxy":
+		ipmode = ptr.To(v1.LoadBalancerIPModeProxy)
+	case "VIP":
+		ipmode = ptr.To(v1.LoadBalancerIPModeVIP)
+	default:
+		return nil, fmt.Errorf(
+			"unsupported IP mode: '%s', must be 'Proxy' or 'VIP'", *ipmode)
+	}
+
+	// On newer releases, we explicitly configure the IP mode
+	supportsIPMode, err := kubeutil.IsKubernetesReleaseOrNewer(l.k8s, 1, 30)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get load balancer status: %w", err)
+	}
+
+	for i, address := range lb.VIPAddresses {
+		status.Ingress[i].IP = address.Address
+
+		if supportsIPMode {
+			status.Ingress[i].IPMode = ipmode
+		}
+	}
+
+	return &status, nil
 }
 
 // ensureValidConfig ensures that the configuration can be applied at all,
@@ -544,18 +658,4 @@ func (l *loadbalancer) findIPsAssignedElsewhere(
 	}
 
 	return conflicts, nil
-}
-
-// loadBalancerStatus generates the v1.LoadBalancerStatus for the given
-// loadbalancer, as required by Kubernetes.
-func loadBalancerStatus(lb *cloudscale.LoadBalancer) *v1.LoadBalancerStatus {
-
-	status := v1.LoadBalancerStatus{}
-	status.Ingress = make([]v1.LoadBalancerIngress, len(lb.VIPAddresses))
-
-	for i, address := range lb.VIPAddresses {
-		status.Ingress[i].IP = address.Address
-	}
-
-	return &status
 }
