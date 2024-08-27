@@ -22,6 +22,7 @@
 # Starting with Kubernetes 1.30 requests originating from within the cluster work out of the box too:
 #
 #     kubectl run -it --rm --restart=Never curl --image=curlimages/curl -- curl http://$(kubectl get service proxy-hello -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+#
 ---
 apiVersion: apps/v1
 kind: Deployment

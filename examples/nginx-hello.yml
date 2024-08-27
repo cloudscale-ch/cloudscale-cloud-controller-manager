@@ -16,6 +16,7 @@
 # IP address as source of requests:
 #
 #     kubectl logs -l "app=hello"
+#
 ---
 apiVersion: apps/v1
 kind: Deployment

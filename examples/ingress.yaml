@@ -1,5 +1,5 @@
 # Deploys two nginxdemos/hello:plain-text containers ("blue" and "red")
-# and creates a ClusterIP services named "blue-svc" and "red-svc" for the
+# and creates ClusterIP services named "blue-svc" and "red-svc" for the
 # deployments. Additionally, an Ingress resource named "simple" is set
 # up to route requests for "/red" to "red-svc" service and
 # requests for "/blue" to the "blue-svc" service.
@@ -19,7 +19,6 @@
 #     curl http://$(kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')/blue
 #     curl http://$(kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')/red
 #
-
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -22,9 +22,8 @@
 #
 #     HEALTH_CHECK_PORT=$(kubectl get svc local-hello -o jsonpath='{.spec.healthCheckNodePort}')
 #     NODE_IPS=$(kubectl get nodes --selector='!node.kubernetes.io/exclude-from-external-load-balancers' -o jsonpath='{.items[*].status.addresses[1].address}')
-#     for NODE_IP in $NODE_IPS; do curl  -s -o /dev/null -w "%{remote_ip}\t%{http_code}\t%{url_effective}\n" "http://$NODE_IP:$HEALTH_CHECK_PORT/livez"; done
-
-
+#     for NODE_IP in $NODE_IPS; do curl -s -o /dev/null -w "%{remote_ip}\t%{http_code}\t%{url_effective}\n" "http://$NODE_IP:$HEALTH_CHECK_PORT/livez"; done
+#
 ---
 apiVersion: apps/v1
 kind: Deployment
