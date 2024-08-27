@@ -1,0 +1,61 @@
+# This example is the same as nginx-hello.yml, except that it uses
+# externalTrafficPolicy: Local on the loadbalancer service.
+#
+#     export KUBECONFIG=path/to/kubeconfig
+#     kubectl apply -f external-traffic-policy-local.yml
+#
+# Wait for `kubectl describe service local-hello` to show "Loadbalancer Ensured",
+# then use the IP address found under "LoadBalancer Ingress" to connect to the
+# service.
+#
+# You can also use the following shortcut:
+#
+#     curl http://$(kubectl get service local-hello -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+#
+#  If you follow the nginx log, you will see that nginx sees one of load balancer IPs as source of
+#  requests:
+#
+#     kubectl logs -l "app=local-hello"
+#
+# A load balancer health monitor has been configured to check which node a replica is scheduled on.
+# You can use the following script to mimic the check performed by the load balancer health monitor:
+#
+#     HEALTH_CHECK_PORT=$(kubectl get svc local-hello -o jsonpath='{.spec.healthCheckNodePort}')
+#     NODE_IPS=$(kubectl get nodes --selector='!node.kubernetes.io/exclude-from-external-load-balancers' -o jsonpath='{.items[*].status.addresses[1].address}')
+#     for NODE_IP in $NODE_IPS; do curl -s -o /dev/null -w "%{remote_ip}\t%{http_code}\t%{url_effective}\n" "http://$NODE_IP:$HEALTH_CHECK_PORT/livez"; done
+#
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-hello
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: local-hello
+  template:
+    metadata:
+      labels:
+        app: local-hello
+    spec:
+      containers:
+      - name: hello
+        image: nginxdemos/hello:plain-text
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: local-hello
+  name: local-hello
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+    name: http
+  selector:
+    app: local-hello
+  type: LoadBalancer
+  externalTrafficPolicy: Local

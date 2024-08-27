@@ -1,0 +1,131 @@
+# This example is the same as nginx-hello.yml, except that it uses
+# the PROXYv2 protocol between the load balancer and the nginx server
+# in order to preserve the original source IP.
+#
+#     export KUBECONFIG=path/to/kubeconfig
+#     kubectl apply -f proxy-v2-protocol.yml
+#
+# Wait for `kubectl describe service proxy-hello` to show "Loadbalancer Ensured",
+# then use the IP address found under "LoadBalancer Ingress" to connect to the
+# service.
+#
+# You can also use the following shortcut:
+#
+#     curl http://$(kubectl get service proxy-hello -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+#
+# If you follow the nginx log, you will see that nginx sees the original source
+# IP address as source of requests (also not the nginx config injected using
+# config maps):
+#
+#     kubectl logs -l "app=proxy-hello"
+#
+# Starting with Kubernetes 1.30 requests originating from within the cluster work out of the box too:
+#
+#     kubectl run -it --rm --restart=Never curl --image=curlimages/curl -- curl http://$(kubectl get service proxy-hello -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+#
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proxy-hello
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: proxy-hello
+  template:
+    metadata:
+      labels:
+        app: proxy-hello
+    spec:
+      containers:
+      - name: proxy-hello
+        image: nginxdemos/hello:plain-text
+        volumeMounts:
+          - name: nginx-config-volume
+            mountPath: /etc/nginx/nginx.conf
+            subPath: nginx.conf
+          - name: hello-plain-config-volume
+            mountPath: /etc/nginx/conf.d/hello-plain-text.conf
+            subPath: hello-plain-text.conf
+      volumes:
+        - name: nginx-config-volume
+          configMap:
+            name: nginx-config
+        - name: hello-plain-config-volume
+          configMap:
+            name: hello-plain-config
+---
+apiVersion: v1
+data:
+  nginx.conf: |2
+
+    user  nginx;
+    worker_processes  auto;
+
+    error_log  /var/log/nginx/error.log notice;
+    pid        /var/run/nginx.pid;
+
+
+    events {
+        worker_connections  1024;
+    }
+
+
+    http {
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+
+        log_format  main  '$proxy_protocol_addr - $remote_user [$time_local] "$request" '
+                          '$status $body_bytes_sent "$http_referer" '
+                          '"$http_user_agent" "$http_x_forwarded_for"';
+
+        access_log  /var/log/nginx/access.log  main;
+
+        sendfile        on;
+        #tcp_nopush     on;
+
+        keepalive_timeout  65;
+
+        #gzip  on;
+
+        include /etc/nginx/conf.d/*.conf;
+    }
+kind: ConfigMap
+metadata:
+  name: nginx-config
+---
+apiVersion: v1
+data:
+  hello-plain-text.conf: |
+    server {
+        listen 80 proxy_protocol;
+        listen [::]:80 proxy_protocol;
+
+        location / {
+            default_type text/plain;
+            expires -1;
+            return 200 'Server address: $server_addr:$server_port\nServer name: $hostname\nDate: $time_local\nURI: $request_uri\nRequest ID: $request_id\n';
+        }
+    }
+kind: ConfigMap
+metadata:
+  name: hello-plain-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: proxy-hello
+  name: proxy-hello
+  annotations:
+    k8s.cloudscale.ch/loadbalancer-pool-protocol: proxyv2
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+    name: http
+  selector:
+    app: proxy-hello
+  type: LoadBalancer

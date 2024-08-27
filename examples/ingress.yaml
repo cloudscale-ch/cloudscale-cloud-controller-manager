@@ -1,0 +1,116 @@
+# Deploys two nginxdemos/hello:plain-text containers ("blue" and "red")
+# and creates ClusterIP services named "blue-svc" and "red-svc" for the
+# deployments. Additionally, an Ingress resource named "simple" is set
+# up to route requests for "/red" to "red-svc" service and
+# requests for "/blue" to the "blue-svc" service.
+#
+# This examples needs ingress-nginx to work, see:
+#     https://kubernetes.github.io/ingress-nginx/deploy/#quick-start
+#
+#     export KUBECONFIG=path/to/kubeconfig
+#     kubectl apply -f ingress.yaml
+#
+# Wait for `kubectl describe service ingress-nginx-controller -n ingress-nginx` to
+# show "Loadbalancer Ensured", then use the IP address found under "LoadBalancer
+# Ingress" to connect to the service.
+#
+# You can also use the following shortcut:
+#
+#     curl http://$(kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')/blue
+#     curl http://$(kubectl get service ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')/red
+#
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: blue
+  name: blue
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blue
+  template:
+    metadata:
+      labels:
+        app: blue
+    spec:
+      containers:
+        - image: nginxdemos/hello:plain-text
+          name: hello
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: blue
+  name: blue-svc
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: blue
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: red
+  name: red
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: red
+  template:
+    metadata:
+      labels:
+        app: red
+    spec:
+      containers:
+        - image: nginxdemos/hello:plain-text
+          name: hello
+          resources: { }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: red
+  name: red-svc
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: red
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: simple
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - backend:
+              service:
+                name: red-svc
+                port:
+                  number: 80
+            path: /red
+            pathType: Exact
+          - backend:
+              service:
+                name: blue-svc
+                port:
+                  number: 80
+            path: /blue
+            pathType: Exact

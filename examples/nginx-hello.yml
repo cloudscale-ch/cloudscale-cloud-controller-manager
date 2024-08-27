@@ -12,6 +12,11 @@
 #
 #     curl http://$(kubectl get service hello -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 #
+# If you follow the nginx log, you will see that nginx sees a cluster internal
+# IP address as source of requests:
+#
+#     kubectl logs -l "app=hello"
+#
 ---
 apiVersion: apps/v1
 kind: Deployment
