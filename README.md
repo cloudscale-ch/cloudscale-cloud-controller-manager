@@ -212,7 +212,7 @@ metadata:
     k8s.cloudscale.ch/loadbalancer-floating-ips: '["1.2.3.4/32"]'
 ```
 
-The full set of configuration toggles can be found in the [`pkg/cloudscale_ccm/loadbalancer.go`](pkg/cloudscale/ccm/loadbalancer.go) file.
+The full set of configuration toggles can be found in the [`pkg/cloudscale_ccm/loadbalancer.go`](pkg/cloudscale_ccm/loadbalancer.go) file.
 
 These annotations are all optional, as they come with reasonable defaults.
 
