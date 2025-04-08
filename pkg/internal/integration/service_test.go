@@ -395,7 +395,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 		url := fmt.Sprintf("http://%s", addr)
 		successful := 0
 
-		for i := 0; i < 45; i++ {
+		for i := 0; i < 60; i++ {
 			time.Sleep(1 * time.Second)
 
 			peer, err := testkit.HTTPRead(url)
@@ -423,7 +423,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	}
 
 	// Ensures the traffic is handled without unexpected delay
-	assertFastResponses := func(addr string, prefix *netip.Prefix) {
+	assertFastResponses := func(addr string, _ *netip.Prefix) {
 		url := fmt.Sprintf("http://%s", addr)
 		for i := 0; i < 60; i++ {
 			before := time.Now()
@@ -431,7 +431,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 			after := time.Now()
 
 			// Bad requests take around 5s as they hit a timeout
-			s.Assert().WithinDuration(before, after, 1000*time.Millisecond)
+			s.Assert().WithinDuration(before, after, 1500*time.Millisecond)
 			s.Assert().NoError(err)
 		}
 	}

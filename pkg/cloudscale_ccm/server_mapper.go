@@ -66,10 +66,10 @@ func (s *serverMapper) mapNodes(
 		servers = append(servers, *server)
 	}
 
-	return limiter.New[cloudscale.Server](nil, servers...)
+	return limiter.New(nil, servers...)
 }
 
-// getByProviderID tries to access the server by provider ID (UUID)
+// getByProviderID tries to access the server by provider ID (UUID).
 func (s *serverMapper) getByProviderID(
 	ctx context.Context,
 	id cloudscaleProviderID,
@@ -86,7 +86,7 @@ func (s *serverMapper) getByProviderID(
 		return limiter.New[cloudscale.Server](err)
 	}
 
-	return limiter.New[cloudscale.Server](nil, *server)
+	return limiter.New(nil, *server)
 }
 
 // findByName returns servers matching the given name (there may be multiple
@@ -110,10 +110,10 @@ func (s *serverMapper) findByName(
 		}
 	}
 
-	return limiter.New[cloudscale.Server](nil, matches...)
+	return limiter.New(nil, matches...)
 }
 
-// nodeAddresses returns a v1.nodeAddresses slice for the metadata
+// nodeAddresses returns a v1.nodeAddresses slice for the metadata.
 func (s *serverMapper) nodeAddresses(
 	server *cloudscale.Server) []v1.NodeAddress {
 

@@ -62,7 +62,7 @@ func AnnotateService(
 		k = strings.ReplaceAll(k, "~", "~0")
 		k = strings.ReplaceAll(k, "/", "~1")
 
-		path := fmt.Sprintf("/metadata/annotations/%s", k)
+		path := "/metadata/annotations/" + k
 
 		operations = append(operations, map[string]any{
 			"op":    "add",
@@ -78,7 +78,7 @@ func AnnotateService(
 	return PatchService(ctx, client, service, operations)
 }
 
-// PatchServices applies the given patch operations on the given service
+// PatchServices applies the given patch operations on the given service.
 func PatchService(
 	ctx context.Context,
 	client kubernetes.Interface,
@@ -108,7 +108,7 @@ func PatchService(
 }
 
 // PatchServiceExternalTrafficPolicy patches the external traffic policy of
-// the given service
+// the given service.
 func PatchServiceExternalTrafficPolicy(
 	ctx context.Context,
 	client kubernetes.Interface,

@@ -11,7 +11,7 @@ func Diff[T any](
 	desired []T,
 	actual []T,
 	key func(item T) string,
-) (delete []T, create []T) {
+) (toDelete []T, toCreate []T) {
 
 	d := make(map[string]T)
 	a := make(map[string]T)
@@ -28,7 +28,7 @@ func Diff[T any](
 		_, ok := a[k]
 
 		if !ok {
-			create = append(create, i)
+			toCreate = append(toCreate, i)
 		}
 	}
 
@@ -36,11 +36,11 @@ func Diff[T any](
 		_, ok := d[k]
 
 		if !ok {
-			delete = append(delete, i)
+			toDelete = append(toDelete, i)
 		}
 	}
 
-	return delete, create
+	return toDelete, toCreate
 }
 
 // Match returns a list of items that match (each item in the list is a

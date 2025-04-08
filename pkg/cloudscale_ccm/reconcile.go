@@ -62,7 +62,7 @@ func desiredLbState(
 
 	// This would indicate a programming error somewhere
 	if len(nodes) != len(servers) {
-		return nil, fmt.Errorf("bad node to server mapping")
+		return nil, errors.New("bad node to server mapping")
 	}
 
 	// Get the zone of the load balancer, either from annotation, or by
@@ -71,7 +71,7 @@ func desiredLbState(
 	if zone == "" {
 		for _, s := range servers {
 			if zone != "" && zone != s.Zone.Slug {
-				return nil, fmt.Errorf(
+				return nil, errors.New(
 					"no loadbalancer zone set and nodes in multiple zones",
 				)
 			}
@@ -341,7 +341,7 @@ func nextLbActions(
 		return next, errors.New("no desired state given")
 	}
 
-	delete := func(url string) {
+	deleteResource := func(url string) {
 		next = append(next,
 			actions.DeleteResource(url),
 			actions.Sleep(500*time.Millisecond))
@@ -412,6 +412,7 @@ func nextLbActions(
 	// If the lb should be deleted, do so (causes a cascade)
 	if desired.lb == nil && actual.lb != nil {
 		next = append(next, actions.DeleteResource(actual.lb.HREF))
+
 		return next, nil
 	}
 
@@ -469,7 +470,7 @@ func nextLbActions(
 	// All other changes are applied aggressively, as the customer would have
 	// to do that manually anyway by recreating the service, which would be
 	// more disruptive.
-	poolsToDelete, poolsToCreate := compare.Diff[*cloudscale.LoadBalancerPool](
+	poolsToDelete, poolsToCreate := compare.Diff(
 		desired.pools,
 		actual.pools,
 		poolKey,
@@ -478,9 +479,9 @@ func nextLbActions(
 	// Remove undesired pools
 	for _, p := range poolsToDelete {
 		for _, m := range actual.members[p] {
-			delete(m.HREF)
+			deleteResource(m.HREF)
 		}
-		delete(p.HREF)
+		deleteResource(p.HREF)
 	}
 
 	// Create missing pools
@@ -491,6 +492,7 @@ func nextLbActions(
 	// If there have been pool changes, refresh
 	if len(poolsToDelete) > 0 || len(poolsToCreate) > 0 {
 		next = append(next, actions.Refetch())
+
 		return next, nil
 	}
 
@@ -515,7 +517,7 @@ func nextLbActions(
 
 		for _, m := range msToDelete {
 			member := m
-			delete(member.HREF)
+			deleteResource(member.HREF)
 		}
 
 		if len(msToDelete) > 0 && len(msToCreate) > 0 {
@@ -536,7 +538,7 @@ func nextLbActions(
 
 		for _, l := range lsToDelete {
 			listener := l
-			delete(listener.HREF)
+			deleteResource(listener.HREF)
 		}
 
 		if len(lsToDelete) > 0 && len(lsToCreate) > 0 {
@@ -557,7 +559,7 @@ func nextLbActions(
 
 		for _, m := range monToDelete {
 			mon := m
-			delete(mon.HREF)
+			deleteResource(mon.HREF)
 		}
 
 		if len(monToDelete) > 0 && len(monToCreate) > 0 {
@@ -573,6 +575,7 @@ func nextLbActions(
 	// If there have been member changes, refresh
 	if actionCount < len(next) {
 		next = append(next, actions.Refetch())
+
 		return next, nil
 	}
 
@@ -753,11 +756,12 @@ func reconcileLbState(
 		}
 
 		// Wait between 5-7.5 seconds between state fetches
+		// #nosec G404
 		wait := time.Duration(5000+rand.Intn(2500)) * time.Millisecond
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("action has been aborted")
+			return errors.New("action has been aborted")
 		case <-time.After(wait):
 			continue
 		}
@@ -796,7 +800,7 @@ func runActions(
 		case control == actions.Proceed:
 			continue
 		case control == actions.Errored:
-			return false, fmt.Errorf("action errored but provided no error")
+			return false, errors.New("action errored but provided no error")
 		default:
 			return false, fmt.Errorf("unknown control code: %d", control)
 		}
@@ -942,12 +946,13 @@ func healthMonitorForPort(
 	return &monitor, nil
 }
 
-// poolsByName returns the pools found in the state, keyed by name
+// poolsByName returns the pools found in the state, keyed by name.
 func (l *lbState) poolsByName() map[string]*cloudscale.LoadBalancerPool {
 	pools := make(map[string]*cloudscale.LoadBalancerPool, len(l.pools))
 	for _, p := range l.pools {
 		pools[p.Name] = p
 	}
+
 	return pools
 }
 

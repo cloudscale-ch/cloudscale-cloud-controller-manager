@@ -1,7 +1,6 @@
 package cloudscale_ccm
 
 import (
-	"context"
 	"testing"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
@@ -10,6 +9,8 @@ import (
 )
 
 func TestFindLoadBalancer(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.WithLoadBalancers([]cloudscale.LoadBalancer{
 		{UUID: "c2e4aabd-8c91-46da-b069-71e01f439806", Name: "foo"},
@@ -25,14 +26,14 @@ func TestFindLoadBalancer(t *testing.T) {
 	i := newServiceInfo(s, "")
 
 	// Neither name nor uuid given
-	lbs := mapper.findByServiceInfo(context.Background(), i)
+	lbs := mapper.findByServiceInfo(t.Context(), i)
 	assert.NoError(t, lbs.None())
 
 	// Using a unique name
 	s.Annotations = make(map[string]string)
 	s.Annotations[LoadBalancerName] = "foo"
 
-	lbs = mapper.findByServiceInfo(context.Background(), i)
+	lbs = mapper.findByServiceInfo(t.Context(), i)
 	lb, err := lbs.One()
 	assert.NoError(t, err)
 	assert.Equal(t, "foo", lb.Name)
@@ -40,14 +41,14 @@ func TestFindLoadBalancer(t *testing.T) {
 	// Using an ambiguous name
 	s.Annotations[LoadBalancerName] = "clone"
 
-	lbs = mapper.findByServiceInfo(context.Background(), i)
+	lbs = mapper.findByServiceInfo(t.Context(), i)
 	_, err = lbs.One()
 	assert.Error(t, err)
 
 	// Using a uuid
 	s.Annotations[LoadBalancerUUID] = "85dffa20-8097-4d75-afa6-9e4372047ce6"
 
-	lbs = mapper.findByServiceInfo(context.Background(), i)
+	lbs = mapper.findByServiceInfo(t.Context(), i)
 	lb, err = lbs.One()
 	assert.NoError(t, err)
 	assert.Equal(t, "clone", lb.Name)

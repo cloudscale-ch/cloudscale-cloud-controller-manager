@@ -1,27 +1,60 @@
+version: "2"
+
 linters:
-  disable-all: true
+  default: all
+  disable:
+    - cyclop
+    - depguard
+    - err113
+    - exhaustruct
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocyclo
+    - gomoddirectives
+    - ireturn
+    - maintidx
+    - mnd
+    - nestif
+    - nilnil
+    - noctx
+    - nonamedreturns
+    - revive
+    - testifylint
+    - testpackage
+    - varnamelen
+    - usestdlibvars
+    - whitespace
+    - wsl
+  settings:
+    lll:
+      line-length: 80
+      tab-width: 4
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - lll
+        source: .+LoadBalancer|// http(s)://
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+formatters:
   enable:
-    - errcheck
-    - exportloopref
-    - gocritic
     - gofmt
-    - gosimple
-    - govet
-    - ineffassign
-    - lll
-    - makezero
-    - staticcheck
-    - unparam
-    - unused
-    - wrapcheck
-
-linters-settings:
-  lll:
-    line-length: 80
-    tab-width: 4
-
-issues:
-  exclude-rules:
-    - linters:
-      - lll
-      source: ".+LoadBalancer|// http(s)://"
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

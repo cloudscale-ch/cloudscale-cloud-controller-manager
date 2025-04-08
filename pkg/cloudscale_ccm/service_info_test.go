@@ -8,12 +8,16 @@ import (
 )
 
 func TestNewServicePanic(t *testing.T) {
+	t.Parallel()
+
 	assert.Panics(t, func() {
 		newServiceInfo(nil, "")
 	})
 }
 
 func TestIsSupported(t *testing.T) {
+	t.Parallel()
+
 	s := testkit.NewService("service").V1()
 	supported, err := newServiceInfo(s, "").isSupported()
 	assert.True(t, supported)
@@ -21,6 +25,8 @@ func TestIsSupported(t *testing.T) {
 }
 
 func TestIsNotSupported(t *testing.T) {
+	t.Parallel()
+
 	s := testkit.NewService("service").V1()
 
 	class := "foo"
@@ -32,6 +38,8 @@ func TestIsNotSupported(t *testing.T) {
 }
 
 func TestAnnotation(t *testing.T) {
+	t.Parallel()
+
 	s := testkit.NewService("service").V1()
 	i := newServiceInfo(s, "")
 
@@ -54,6 +62,8 @@ func TestAnnotation(t *testing.T) {
 }
 
 func TestAnnotationInt(t *testing.T) {
+	t.Parallel()
+
 	s := testkit.NewService("service").V1()
 	i := newServiceInfo(s, "")
 
@@ -75,6 +85,8 @@ func TestAnnotationInt(t *testing.T) {
 }
 
 func TestAnnotationList(t *testing.T) {
+	t.Parallel()
+
 	s := testkit.NewService("service").V1()
 	i := newServiceInfo(s, "")
 

@@ -2,6 +2,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -15,7 +16,7 @@ type Action interface {
 	Run(ctx context.Context, client *cloudscale.Client) (Control, error)
 }
 
-// RefetchAction is an empty action that sends a `Refresh` control code
+// RefetchAction is an empty action that sends a `Refresh` control code.
 type RefetchAction struct{}
 
 func Refetch() Action {
@@ -69,7 +70,7 @@ func (a *CreateLbAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// RenameLbAction allows to rename a load balancer via UUID
+// RenameLbAction allows to rename a load balancer via UUID.
 type RenameLbAction struct {
 	UUID string
 	Name string
@@ -93,7 +94,7 @@ func (a *RenameLbAction) Run(
 	))
 }
 
-// AwaitLbAction waits for a load balancer to be ready
+// AwaitLbAction waits for a load balancer to be ready.
 type AwaitLbAction struct {
 	lb *cloudscale.LoadBalancer
 }
@@ -119,7 +120,7 @@ func (a *AwaitLbAction) Run(
 	}
 }
 
-// DeleteMonitorsAction deletes the given resources
+// DeleteMonitorsAction deletes the given resources.
 type DeleteResourceAction struct {
 	url string
 }
@@ -144,7 +145,7 @@ func (a *DeleteResourceAction) Run(
 	return ProceedOnSuccess(client.Do(ctx, req, nil))
 }
 
-// SleepAction sleeps for a given amount of time, unless cancelled
+// SleepAction sleeps for a given amount of time, unless cancelled.
 type SleepAction struct {
 	duration time.Duration
 }
@@ -161,7 +162,7 @@ func (a *SleepAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
 	select {
 	case <-ctx.Done():
-		return Errored, fmt.Errorf("action has been aborted")
+		return Errored, errors.New("action has been aborted")
 	case <-time.After(a.duration):
 		break
 	}
@@ -169,7 +170,7 @@ func (a *SleepAction) Run(
 	return Proceed, nil
 }
 
-// CreatePoolAction creates a pool
+// CreatePoolAction creates a pool.
 type CreatePoolAction struct {
 	lbUUID string
 	pool   *cloudscale.LoadBalancerPool
@@ -198,7 +199,7 @@ func (a *CreatePoolAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// CreaetPoolMemberAction creates a pool member
+// CreaetPoolMemberAction creates a pool member.
 type CreatePoolMemberAction struct {
 	poolUUID string
 	member   *cloudscale.LoadBalancerPoolMember
@@ -230,7 +231,7 @@ func (a *CreatePoolMemberAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// CreateListenerAction creates a listener
+// CreateListenerAction creates a listener.
 type CreateListenerAction struct {
 	poolUUID string
 	listener *cloudscale.LoadBalancerListener
@@ -265,7 +266,7 @@ func (a *CreateListenerAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateListenerAllowedCIDRsAction updates a listener's allowed CIDRs property
+// UpdateListenerAllowedCIDRsAction updates a listener's allowed CIDRs.
 type UpdateListenerAllowedCIDRsAction struct {
 	listenerUUID string
 	allowedCIDRs []string
@@ -298,7 +299,7 @@ func (a *UpdateListenerAllowedCIDRsAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateListenerTimeoutAction updates a listener's timeout
+// UpdateListenerTimeoutAction updates a listener's timeout.
 type UpdateListenerTimeoutAction struct {
 	key          string
 	listenerUUID string
@@ -341,7 +342,7 @@ func (a *UpdateListenerTimeoutAction) Run(
 		client.LoadBalancerListeners.Update(ctx, a.listenerUUID, &req))
 }
 
-// CreateHealthMonitorAction creates a health monitor
+// CreateHealthMonitorAction creates a health monitor.
 type CreateHealthMonitorAction struct {
 	poolUUID string
 	monitor  *cloudscale.LoadBalancerHealthMonitor
@@ -388,7 +389,7 @@ func (a *CreateHealthMonitorAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorHTTPMethod updates a monitor's HTTP method
+// UpdateMonitorHTTPMethod updates a monitor's HTTP method.
 type UpdateMonitorHTTPMethodAction struct {
 	monitorUUID string
 	method      string
@@ -420,7 +421,7 @@ func (a *UpdateMonitorHTTPMethodAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorHTTPPath updates a monitor's HTTP path
+// UpdateMonitorHTTPPath updates a monitor's HTTP path.
 type UpdateMonitorHTTPPathAction struct {
 	monitorUUID string
 	path        string
@@ -452,7 +453,7 @@ func (a *UpdateMonitorHTTPPathAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorHTTPHost updates a monitor's HTTP host
+// UpdateMonitorHTTPHost updates a monitor's HTTP host.
 type UpdateMonitorHTTPHostAction struct {
 	monitorUUID string
 	host        *string
@@ -484,7 +485,7 @@ func (a *UpdateMonitorHTTPHostAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorHTTPExpectedCodes updates a monitor's HTTP expected codes
+// UpdateMonitorHTTPExpectedCodes updates a monitor's HTTP expected codes.
 type UpdateMonitorHTTPExpectedCodesAction struct {
 	monitorUUID   string
 	expectedCodes []string
@@ -521,7 +522,7 @@ func (a *UpdateMonitorHTTPExpectedCodesAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorNumberAction updates a monitor's numbers
+// UpdateMonitorNumberAction updates a monitor's numbers.
 type UpdateMonitorNumberAction struct {
 	monitorUUID string
 	number      int
@@ -563,7 +564,7 @@ func (a *UpdateMonitorNumberAction) Run(
 		client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID, &req))
 }
 
-// AssignFloatingIP assigns a Floating IP to the given LoadBalancer UUID
+// AssignFloatingIP assigns a Floating IP to the given LoadBalancer UUID.
 type AssignFloatingIPAction struct {
 	ip     string
 	lbUUID string

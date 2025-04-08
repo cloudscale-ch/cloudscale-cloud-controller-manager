@@ -8,7 +8,9 @@ import (
 )
 
 func TestError(t *testing.T) {
-	lim := New[string](errors.New("fail"), "foo")
+	t.Parallel()
+
+	lim := New(errors.New("fail"), "foo")
 
 	v, err := lim.One()
 	assert.Error(t, err)
@@ -22,7 +24,9 @@ func TestError(t *testing.T) {
 }
 
 func TestFoundOne(t *testing.T) {
-	lim := New[string](nil, "foo")
+	t.Parallel()
+
+	lim := New(nil, "foo")
 
 	v, err := lim.One()
 	assert.NoError(t, err)
@@ -30,6 +34,8 @@ func TestFoundOne(t *testing.T) {
 }
 
 func TestNotFoundOne(t *testing.T) {
+	t.Parallel()
+
 	lim := New[string](nil)
 
 	v, err := lim.One()
@@ -38,6 +44,8 @@ func TestNotFoundOne(t *testing.T) {
 }
 
 func TestAtMostOneEmpty(t *testing.T) {
+	t.Parallel()
+
 	lim := New[string](nil)
 
 	v, err := lim.AtMostOne()
@@ -46,7 +54,9 @@ func TestAtMostOneEmpty(t *testing.T) {
 }
 
 func TestAtMostOne(t *testing.T) {
-	lim := New[string](nil, "foo")
+	t.Parallel()
+
+	lim := New(nil, "foo")
 
 	v, err := lim.AtMostOne()
 	assert.NoError(t, err)
@@ -54,7 +64,9 @@ func TestAtMostOne(t *testing.T) {
 }
 
 func TestAtMostOneTooMany(t *testing.T) {
-	lim := New[string](nil, "foo", "bar")
+	t.Parallel()
+
+	lim := New(nil, "foo", "bar")
 
 	v, err := lim.AtMostOne()
 	assert.Error(t, err)
@@ -62,17 +74,23 @@ func TestAtMostOneTooMany(t *testing.T) {
 }
 
 func TestNone(t *testing.T) {
+	t.Parallel()
+
 	lim := New[string](nil)
 	assert.Nil(t, lim.None())
 }
 
 func TestNoneNotEmpty(t *testing.T) {
-	lim := New[string](nil, "foo")
+	t.Parallel()
+
+	lim := New(nil, "foo")
 	assert.Error(t, lim.None())
 }
 
 func TestAll(t *testing.T) {
-	lim := New[string](nil, "foo", "bar")
+	t.Parallel()
+
+	lim := New(nil, "foo", "bar")
 
 	v, err := lim.All()
 	assert.NoError(t, err)

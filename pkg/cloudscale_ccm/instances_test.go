@@ -1,7 +1,6 @@
 package cloudscale_ccm
 
 import (
-	"context"
 	"testing"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
@@ -11,6 +10,8 @@ import (
 )
 
 func TestInstanceExists(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.WithServers([]cloudscale.Server{
 		{UUID: "c2e4aabd-8c91-46da-b069-71e01f439806", Name: "foo"},
@@ -22,13 +23,13 @@ func TestInstanceExists(t *testing.T) {
 	i := instances{srv: serverMapper{client: server.Client()}}
 
 	assertExists := func(exists bool, node *v1.Node) {
-		actual, err := i.InstanceExists(context.Background(), node)
+		actual, err := i.InstanceExists(t.Context(), node)
 		assert.NoError(t, err)
 		assert.Equal(t, exists, actual)
 	}
 
 	assertError := func(node *v1.Node) {
-		_, err := i.InstanceExists(context.Background(), node)
+		_, err := i.InstanceExists(t.Context(), node)
 		assert.Error(t, err)
 	}
 
@@ -44,6 +45,8 @@ func TestInstanceExists(t *testing.T) {
 }
 
 func TestInstanceShutdown(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.WithServers([]cloudscale.Server{
 		{UUID: "c2e4aabd-8c91-46da-b069-000000000001",
@@ -59,13 +62,13 @@ func TestInstanceShutdown(t *testing.T) {
 	i := instances{srv: serverMapper{client: server.Client()}}
 
 	assertShutdown := func(shutdown bool, node *v1.Node) {
-		actual, err := i.InstanceShutdown(context.Background(), node)
+		actual, err := i.InstanceShutdown(t.Context(), node)
 		assert.NoError(t, err)
 		assert.Equal(t, shutdown, actual)
 	}
 
 	assertError := func(node *v1.Node) {
-		_, err := i.InstanceExists(context.Background(), node)
+		_, err := i.InstanceExists(t.Context(), node)
 		assert.Error(t, err)
 	}
 
@@ -84,12 +87,14 @@ func TestInstanceShutdown(t *testing.T) {
 	// If the node cannot be found, we rather err, than make any statement
 	// about it being shutdown or not (that's the job of InstanceExists)
 	_, err := i.InstanceShutdown(
-		context.Background(), testkit.NewNode("unknown").V1())
+		t.Context(), testkit.NewNode("unknown").V1())
 
 	assert.Error(t, err)
 }
 
 func TestInstanceMetadata(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.WithServers([]cloudscale.Server{
 		{
@@ -124,7 +129,7 @@ func TestInstanceMetadata(t *testing.T) {
 	i := instances{srv: serverMapper{client: server.Client()}}
 
 	meta, err := i.InstanceMetadata(
-		context.Background(),
+		t.Context(),
 		testkit.NewNode("worker-1").V1(),
 	)
 
@@ -145,6 +150,8 @@ func TestInstanceMetadata(t *testing.T) {
 }
 
 func TestInvalidNodeProvider(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.WithServers([]cloudscale.Server{
 		{Name: "foo"},
@@ -156,12 +163,12 @@ func TestInvalidNodeProvider(t *testing.T) {
 
 	node := testkit.NewNode("").WithProviderID("cloudscale://invalid").V1()
 
-	_, err := i.InstanceExists(context.Background(), node)
+	_, err := i.InstanceExists(t.Context(), node)
 	assert.Error(t, err)
 
-	_, err = i.InstanceShutdown(context.Background(), node)
+	_, err = i.InstanceShutdown(t.Context(), node)
 	assert.Error(t, err)
 
-	_, err = i.InstanceMetadata(context.Background(), node)
+	_, err = i.InstanceMetadata(t.Context(), node)
 	assert.Error(t, err)
 }

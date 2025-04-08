@@ -5,8 +5,8 @@ build:
 		cmd/cloudscale-cloud-controller-manager/main.go
 
 lint:
-	golangci-lint run --timeout=10m
-	staticcheck ./...
+	go tool -modfile tool.mod golangci-lint run --timeout=10m --show-stats=false
+	go tool -modfile tool.mod staticcheck ./...
 
 test:
 	go test -race -v \

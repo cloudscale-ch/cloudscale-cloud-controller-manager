@@ -44,6 +44,7 @@ func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 			"Node", node.Name,
 			"ProviderID", node.Spec.ProviderID,
 		)
+
 		return false, nil
 	}
 
@@ -52,6 +53,7 @@ func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 		"Node", node.Name,
 		"ProviderID", node.Spec.ProviderID,
 	)
+
 	return true, nil
 }
 
@@ -77,6 +79,7 @@ func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (
 		"ProviderID", node.Spec.ProviderID,
 		"Server.Status", server.Status,
 	)
+
 	return server.Status == "stopped", nil
 }
 

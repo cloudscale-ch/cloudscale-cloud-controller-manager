@@ -2,12 +2,13 @@ package cloudscale_ccm
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/kubeutil"
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
-	"golang.org/x/exp/slices"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -378,7 +379,7 @@ func (l *loadbalancer) EnsureLoadBalancer(
 
 	// Refuse to do anything if there are no nodes
 	if len(nodes) == 0 {
-		return nil, fmt.Errorf(
+		return nil, errors.New(
 			"no valid nodes for service found, please verify there is " +
 				"at least one that allows load balancers",
 		)
@@ -512,21 +513,24 @@ func (l *loadbalancer) loadBalancerStatus(
 	hostname := serviceInfo.annotation(LoadBalancerForceHostname)
 	if len(hostname) > 0 {
 		status.Ingress = []v1.LoadBalancerIngress{{Hostname: hostname}}
+
 		return &status, nil
 	}
 
 	// Otherwise there as many items as there are addresses
 	status.Ingress = make([]v1.LoadBalancerIngress, len(lb.VIPAddresses))
 
-	var ipmode *v1.LoadBalancerIPMode
-	switch serviceInfo.annotation(LoadBalancerIPMode) {
+	var ipMode *v1.LoadBalancerIPMode
+	ipModeAnnotation := serviceInfo.annotation(LoadBalancerIPMode)
+	switch ipModeAnnotation {
 	case "Proxy":
-		ipmode = ptr.To(v1.LoadBalancerIPModeProxy)
+		ipMode = ptr.To(v1.LoadBalancerIPModeProxy)
 	case "VIP":
-		ipmode = ptr.To(v1.LoadBalancerIPModeVIP)
+		ipMode = ptr.To(v1.LoadBalancerIPModeVIP)
 	default:
 		return nil, fmt.Errorf(
-			"unsupported IP mode: '%s', must be 'Proxy' or 'VIP'", *ipmode)
+			"unsupported IP mode: '%s', must be 'Proxy' or 'VIP'",
+			ipModeAnnotation)
 	}
 
 	// On newer releases, we explicitly configure the IP mode
@@ -539,7 +543,7 @@ func (l *loadbalancer) loadBalancerStatus(
 		status.Ingress[i].IP = address.Address
 
 		if supportsIPMode {
-			status.Ingress[i].IPMode = ipmode
+			status.Ingress[i].IPMode = ipMode
 		}
 	}
 
@@ -604,7 +608,7 @@ func (l *loadbalancer) findIPsAssignedElsewhere(
 
 	conflicts := make(map[string]string, 0)
 
-	// Unfortuantely, there's no way to filter for the services that matter
+	// Unfortunately, there's no way to filter for the services that matter
 	// here. The only available field selectors for services are
 	// `metadata.name` and `metadata.namespace`.
 	//

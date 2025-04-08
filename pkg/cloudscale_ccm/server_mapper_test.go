@@ -1,7 +1,6 @@
 package cloudscale_ccm
 
 import (
-	"context"
 	"testing"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
@@ -11,6 +10,8 @@ import (
 )
 
 func TestServerByNode(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.WithServers([]cloudscale.Server{
 		{UUID: "c2e4aabd-8c91-46da-b069-71e01f439806", Name: "foo"},
@@ -24,18 +25,18 @@ func TestServerByNode(t *testing.T) {
 	mapper := serverMapper{client: server.Client()}
 
 	assertMatch := func(name string, node *v1.Node) {
-		match, err := mapper.findByNode(context.Background(), node).One()
+		match, err := mapper.findByNode(t.Context(), node).One()
 		assert.NoError(t, err)
 		assert.Equal(t, name, match.Name)
 	}
 
 	assertMissing := func(node *v1.Node) {
-		err := mapper.findByNode(context.Background(), node).None()
+		err := mapper.findByNode(t.Context(), node).None()
 		assert.NoError(t, err)
 	}
 
 	assertError := func(node *v1.Node) {
-		_, err := mapper.findByNode(context.Background(), node).One()
+		_, err := mapper.findByNode(t.Context(), node).One()
 		assert.Error(t, err)
 	}
 
@@ -74,6 +75,8 @@ func TestServerByNode(t *testing.T) {
 }
 
 func TestNoServers(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On("/v1/servers", 200, "[]")
 	server.On("/v1/servers/9a8fa1fc-7fb4-4503-b0d6-b946912a99f1", 404, "{}")
@@ -83,7 +86,7 @@ func TestNoServers(t *testing.T) {
 	mapper := serverMapper{client: server.Client()}
 
 	assertMissing := func(node *v1.Node) {
-		match, err := mapper.findByNode(context.Background(), node).AtMostOne()
+		match, err := mapper.findByNode(t.Context(), node).AtMostOne()
 		assert.NoError(t, err)
 		assert.Nil(t, match)
 	}

@@ -2,7 +2,6 @@ package cloudscale_ccm
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"testing/iotest"
 	"time"
@@ -11,6 +10,7 @@ import (
 )
 
 func TestMaskAccessToken(t *testing.T) {
+	t.Parallel()
 
 	assertMasked := func(input string, expected string) {
 		assert.Equal(t, expected, maskAccessToken(input))
@@ -24,19 +24,23 @@ func TestMaskAccessToken(t *testing.T) {
 }
 
 func TestNewCloudscaleProviderWithoutToken(t *testing.T) {
+	t.Parallel()
+
 	if _, err := newCloudscaleProvider(nil); err == nil {
 		t.Error("no token in env: newCloudscaleProvider should have failed")
 	}
 }
 
 func TestNewCloudscaleProviderWithToken(t *testing.T) {
-	os.Setenv(AccessToken, "1234")
+	t.Setenv(AccessToken, "1234")
 	if _, err := newCloudscaleProvider(nil); err != nil {
 		t.Error("newCloudscaleProvider should initialize with just a token")
 	}
 }
 
 func TestNewCloudscaleProviderWithBadConfig(t *testing.T) {
+	t.Setenv(AccessToken, "1234")
+
 	cfg := iotest.ErrReader(errors.New("bad config"))
 	if _, err := newCloudscaleProvider(cfg); err != nil {
 		t.Error("newCloudscaleProvider should ignore the config file")
@@ -44,12 +48,14 @@ func TestNewCloudscaleProviderWithBadConfig(t *testing.T) {
 }
 
 func TestDefaultTimeout(t *testing.T) {
+	t.Parallel()
+
 	timeout := apiTimeout()
 	assert.Equal(t, timeout, 20*time.Second)
 }
 
 func TestCustomTimeout(t *testing.T) {
-	os.Setenv(ApiTimeout, "5")
+	t.Setenv(ApiTimeout, "5")
 	timeout := apiTimeout()
 	assert.Equal(t, timeout, 5*time.Second)
 }

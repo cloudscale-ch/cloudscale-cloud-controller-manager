@@ -11,7 +11,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// serviceInfo wraps v1.Service with cloudscale specific methods
+// serviceInfo wraps v1.Service with cloudscale specific methods.
 type serviceInfo struct {
 	Service     *v1.Service
 	clusterName string
@@ -121,12 +121,13 @@ func (s serviceInfo) annotation(key string) string {
 	default:
 		return s.annotationOrElse(key, func() string {
 			klog.Warning("unknown annotation:", key)
+
 			return ""
 		})
 	}
 }
 
-// Returns the annotation as int, or an error
+// Returns the annotation as int, or an error.
 func (s serviceInfo) annotationInt(key string) (int, error) {
 	v, err := strconv.Atoi(s.annotation(key))
 	if err != nil {
@@ -137,6 +138,7 @@ func (s serviceInfo) annotationInt(key string) (int, error) {
 			err,
 		)
 	}
+
 	return v, nil
 }
 
@@ -171,6 +173,7 @@ func (s serviceInfo) annotationMarshal(key string, target any) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse %s: %w", key, err)
 	}
+
 	return nil
 }
 

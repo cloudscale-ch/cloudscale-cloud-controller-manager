@@ -5,7 +5,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Service helps construct Kubernetes v1.Service objects for testing
+// Service helps construct Kubernetes v1.Service objects for testing.
 type Service struct {
 	Name string
 }
@@ -22,5 +22,6 @@ func (s *Service) V1() *v1.Service {
 
 func (s *Service) WithName(name string) *Service {
 	s.Name = name
+
 	return s
 }
