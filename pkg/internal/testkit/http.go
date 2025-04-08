@@ -3,7 +3,9 @@ package testkit
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -17,14 +19,16 @@ type HelloResponse struct {
 }
 
 func HelloNginx(addr string, port uint16) (*HelloResponse, error) {
-	body, err := HTTPRead(fmt.Sprintf("http://%s:%d", addr, port))
+	body, err := HTTPRead(
+		"http://" + net.JoinHostPort(addr, strconv.FormatUint(
+			uint64(port), 10)))
 	if err != nil {
 		return nil, err
 	}
 
 	response := HelloResponse{}
 	lines := strings.Split(body, "\n")
-	for i := 0; i < len(lines); i++ {
+	for i := range lines {
 		switch {
 		case strings.HasPrefix(lines[i], "Server address: "):
 			response.ServerAddress = strings.SplitN(lines[i], ": ", 2)[1]

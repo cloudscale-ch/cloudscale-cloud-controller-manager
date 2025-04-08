@@ -1,18 +1,34 @@
 version: "2"
+
 linters:
-  default: none
-  enable:
-    - copyloopvar
-    - errcheck
-    - gocritic
-    - govet
-    - ineffassign
-    - lll
-    - makezero
-    - staticcheck
-    - unparam
-    - unused
-    - wrapcheck
+  default: all
+  disable:
+    - cyclop
+    - depguard
+    - err113
+    - exhaustruct
+    - forbidigo
+    - forcetypeassert
+    - funlen
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocyclo
+    - gomoddirectives
+    - ireturn
+    - maintidx
+    - mnd
+    - nestif
+    - nilnil
+    - noctx
+    - nonamedreturns
+    - revive
+    - testifylint
+    - testpackage
+    - varnamelen
+    - usestdlibvars
+    - whitespace
+    - wsl
   settings:
     lll:
       line-length: 80
@@ -32,6 +48,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
+
 formatters:
   enable:
     - gofmt

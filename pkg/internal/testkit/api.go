@@ -91,7 +91,7 @@ func (m *MockAPIServer) WithServers(servers []cloudscale.Server) {
 	m.On("/v1/servers", 200, servers)
 	for _, server := range servers {
 		if server.UUID != "" {
-			m.On(fmt.Sprintf("/v1/servers/%s", server.UUID), 200, server)
+			m.On("/v1/servers/"+server.UUID, 200, server)
 		}
 	}
 }
@@ -103,7 +103,7 @@ func (m *MockAPIServer) WithLoadBalancers(lbs []cloudscale.LoadBalancer) {
 	m.On("/v1/load-balancers", 200, lbs)
 	for _, lb := range lbs {
 		if lb.UUID != "" {
-			m.On(fmt.Sprintf("/v1/load-balancers/%s", lb.UUID), 200, lb)
+			m.On("/v1/load-balancers/"+lb.UUID, 200, lb)
 		}
 	}
 }

@@ -8,6 +8,8 @@ import (
 )
 
 func TestFormatProviderID(t *testing.T) {
+	t.Parallel()
+
 	assertFormat := func(id string, formatted string) {
 		assert.Equal(t, formatted, cloudscaleProviderID{
 			id: uuid.MustParse(id),
@@ -25,6 +27,8 @@ func TestFormatProviderID(t *testing.T) {
 }
 
 func TestParseProviderIDSuccess(t *testing.T) {
+	t.Parallel()
+
 	assertParseResult := func(id string, expected cloudscaleProviderID) {
 		i, err := parseCloudscaleProviderID(id)
 
@@ -43,6 +47,8 @@ func TestParseProviderIDSuccess(t *testing.T) {
 }
 
 func TestParseProviderIDError(t *testing.T) {
+	t.Parallel()
+
 	assertError := func(id string) {
 		_, err := parseCloudscaleProviderID(id)
 		assert.Error(t, err)

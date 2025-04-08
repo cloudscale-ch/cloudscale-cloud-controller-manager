@@ -1,7 +1,6 @@
 package cloudscale_ccm
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -13,22 +12,30 @@ import (
 )
 
 func TestPoolName(t *testing.T) {
+	t.Parallel()
+
 	assert.Equal(t, "tcp", poolName(v1.ProtocolTCP, ""))
 	assert.Equal(t, "udp/foo", poolName(v1.ProtocolUDP, "foo"))
 	assert.Equal(t, "udp/FOO", poolName(v1.ProtocolUDP, "FOO"))
 }
 
 func TestPoolMemberName(t *testing.T) {
+	t.Parallel()
+
 	assert.Equal(t, "10.0.0.1:80", poolMemberName("10.0.0.1", 80))
 	assert.Equal(t, "[::1]:443", poolMemberName("::1", 443))
 }
 
 func TestListenerName(t *testing.T) {
+	t.Parallel()
+
 	assert.Equal(t, "tcp/80", listenerName("TCP", 80))
 	assert.Equal(t, "tcp/443", listenerName("tcp", 443))
 }
 
 func TestDesiredName(t *testing.T) {
+	t.Parallel()
+
 	s := testkit.NewService("service").V1()
 	s.UID = "deadbeef"
 
@@ -52,6 +59,8 @@ func TestDesiredName(t *testing.T) {
 }
 
 func TestDesiredZone(t *testing.T) {
+	t.Parallel()
+
 	s := testkit.NewService("service").V1()
 	i := newServiceInfo(s, "")
 
@@ -83,6 +92,8 @@ func TestDesiredZone(t *testing.T) {
 }
 
 func TestDesiredService(t *testing.T) {
+	t.Parallel()
+
 	s := testkit.NewService("service").V1()
 	i := newServiceInfo(s, "")
 
@@ -189,6 +200,8 @@ func TestDesiredService(t *testing.T) {
 }
 
 func TestActualState(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.WithLoadBalancers([]cloudscale.LoadBalancer{
 		{
@@ -248,7 +261,7 @@ func TestActualState(t *testing.T) {
 
 	i := newServiceInfo(s, "")
 
-	actual, err := actualLbState(context.Background(), &mapper, i)
+	actual, err := actualLbState(t.Context(), &mapper, i)
 	assert.NoError(t, err)
 
 	assert.Equal(t, "k8test-service-test", actual.lb.Name)
@@ -265,6 +278,8 @@ func TestActualState(t *testing.T) {
 }
 
 func TestNextLbActionsInvalidCalls(t *testing.T) {
+	t.Parallel()
+
 	assertError := func(d *lbState, a *lbState) {
 		_, err := nextLbActions(d, a)
 		assert.Error(t, err)
@@ -287,6 +302,8 @@ func TestNextLbActionsInvalidCalls(t *testing.T) {
 // states can be recreated. We cannot however, regain a previously IP address,
 // assigned automatically.
 func TestNextLbProhibitDangerousChanges(t *testing.T) {
+	t.Parallel()
+
 	assertError := func(d *lbState, a *lbState) {
 		_, err := nextLbActions(d, a)
 		assert.Error(t, err)
@@ -338,6 +355,7 @@ func TestNextLbProhibitDangerousChanges(t *testing.T) {
 }
 
 func TestNextLbActions(t *testing.T) {
+	t.Parallel()
 
 	assertActions := func(d *lbState, a *lbState, expected []actions.Action) {
 		actions, err := nextLbActions(d, a)
@@ -393,6 +411,7 @@ func TestNextLbActions(t *testing.T) {
 }
 
 func TestNextPoolActions(t *testing.T) {
+	t.Parallel()
 
 	assertActions := func(d *lbState, a *lbState, expected []actions.Action) {
 		actions, err := nextLbActions(d, a)
@@ -499,6 +518,7 @@ func TestNextPoolActions(t *testing.T) {
 }
 
 func TestNextPoolMemberActions(t *testing.T) {
+	t.Parallel()
 
 	assertActions := func(d *lbState, a *lbState, expected []actions.Action) {
 		actions, err := nextLbActions(d, a)
@@ -566,6 +586,7 @@ func TestNextPoolMemberActions(t *testing.T) {
 }
 
 func TestNextListenerActions(t *testing.T) {
+	t.Parallel()
 
 	assertActions := func(d *lbState, a *lbState, expected []actions.Action) {
 		actions, err := nextLbActions(d, a)
@@ -671,6 +692,7 @@ func TestNextListenerActions(t *testing.T) {
 }
 
 func TestNextMonitorActions(t *testing.T) {
+	t.Parallel()
 
 	assertActions := func(d *lbState, a *lbState, expected []actions.Action) {
 		actions, err := nextLbActions(d, a)
@@ -797,6 +819,8 @@ func TestNextMonitorActions(t *testing.T) {
 }
 
 func TestLimitSubnets(t *testing.T) {
+	t.Parallel()
+
 	s := testkit.NewService("service").V1()
 	s.Spec.Ports = []v1.ServicePort{
 		{

@@ -11,14 +11,18 @@ import (
 )
 
 func TestRefetch(t *testing.T) {
+	t.Parallel()
+
 	assert.NotEmpty(t, Refetch().Label())
 
-	v, err := Refetch().Run(context.Background(), nil)
+	v, err := Refetch().Run(t.Context(), nil)
 	assert.Equal(t, Refresh, v)
 	assert.NoError(t, err)
 }
 
 func TestCreateLbAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On("/v1/load-balancers", 201, "{}")
 	server.Start()
@@ -37,7 +41,7 @@ func TestCreateLbAction(t *testing.T) {
 	})
 
 	assert.NotEmpty(t, action.Label())
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
@@ -51,6 +55,8 @@ func TestCreateLbAction(t *testing.T) {
 }
 
 func TestRenameLbAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/00000000-0000-0000-0000-000000000000", 204, "")
@@ -61,30 +67,34 @@ func TestRenameLbAction(t *testing.T) {
 	action := RenameLb("00000000-0000-0000-0000-000000000000", "new-name")
 
 	assert.NotEmpty(t, action.Label())
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 }
 
 func TestAwaitLbAction(t *testing.T) {
+	t.Parallel()
+
 	lb := cloudscale.LoadBalancer{}
 
 	action := AwaitLb(&lb)
 	assert.NotEmpty(t, action.Label())
 
 	lb.Status = "changing"
-	v, err := action.Run(context.Background(), nil)
+	v, err := action.Run(t.Context(), nil)
 	assert.NoError(t, err)
 	assert.Equal(t, Refresh, v)
 
 	lb.Status = "ready"
-	v, err = action.Run(context.Background(), nil)
+	v, err = action.Run(t.Context(), nil)
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 }
 
 func TestDeleteResourceAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On("/v1/foo", 204, "")
 	server.On("/v1/bar", 403, "")
@@ -94,29 +104,31 @@ func TestDeleteResourceAction(t *testing.T) {
 	action := DeleteResource("/v1/foo")
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
 	action = DeleteResource("/v1/bar")
 
-	v, err = action.Run(context.Background(), server.Client())
+	v, err = action.Run(t.Context(), server.Client())
 	assert.Error(t, err)
 	assert.Equal(t, Errored, v)
 }
 
 func TestSleepAction(t *testing.T) {
+	t.Parallel()
+
 	action := Sleep(100 * time.Millisecond)
 	assert.NotEmpty(t, action.Label())
 
 	start := time.Now()
-	v, err := action.Run(context.Background(), nil)
+	v, err := action.Run(t.Context(), nil)
 
 	assert.Greater(t, time.Since(start), 100*time.Millisecond)
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	start = time.Now()
@@ -127,6 +139,8 @@ func TestSleepAction(t *testing.T) {
 }
 
 func TestCreatePoolAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On("/v1/load-balancers/pools", 201, "{}")
 	server.Start()
@@ -142,7 +156,7 @@ func TestCreatePoolAction(t *testing.T) {
 
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -156,6 +170,8 @@ func TestCreatePoolAction(t *testing.T) {
 }
 
 func TestCreatePoolMemberAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/pools/00000000-0000-0000-0000-000000000000"+
@@ -176,7 +192,7 @@ func TestCreatePoolMemberAction(t *testing.T) {
 
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -190,6 +206,8 @@ func TestCreatePoolMemberAction(t *testing.T) {
 }
 
 func TestCreateListenerAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On("/v1/load-balancers/listeners", 201, "{}")
 	server.Start()
@@ -209,7 +227,7 @@ func TestCreateListenerAction(t *testing.T) {
 
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -226,6 +244,8 @@ func TestCreateListenerAction(t *testing.T) {
 }
 
 func TestUpdateListenerAllowedCIDRsAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/listeners/00000000-0000-0000-0000-000000000000",
@@ -238,7 +258,7 @@ func TestUpdateListenerAllowedCIDRsAction(t *testing.T) {
 
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -249,6 +269,8 @@ func TestUpdateListenerAllowedCIDRsAction(t *testing.T) {
 }
 
 func TestUpdateListenerTimeoutAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/listeners/00000000-0000-0000-0000-000000000000",
@@ -264,7 +286,7 @@ func TestUpdateListenerTimeoutAction(t *testing.T) {
 	)
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -279,7 +301,7 @@ func TestUpdateListenerTimeoutAction(t *testing.T) {
 		"member-connect-ms",
 	)
 
-	_, _ = action.Run(context.Background(), server.Client())
+	_, _ = action.Run(t.Context(), server.Client())
 	server.LastSent(&sent)
 	assert.Equal(t, 20, sent.TimeoutMemberConnectMS)
 
@@ -290,7 +312,7 @@ func TestUpdateListenerTimeoutAction(t *testing.T) {
 		"member-data-ms",
 	)
 
-	_, _ = action.Run(context.Background(), server.Client())
+	_, _ = action.Run(t.Context(), server.Client())
 	server.LastSent(&sent)
 	assert.Equal(t, 30, sent.TimeoutMemberDataMS)
 
@@ -301,12 +323,14 @@ func TestUpdateListenerTimeoutAction(t *testing.T) {
 		"foo",
 	)
 
-	v, err = action.Run(context.Background(), server.Client())
+	v, err = action.Run(t.Context(), server.Client())
 	assert.Error(t, err)
 	assert.Equal(t, Errored, v)
 }
 
 func TestCreateHealthMonitorAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On("/v1/load-balancers/health-monitors", 201, "{}")
 	server.Start()
@@ -332,7 +356,7 @@ func TestCreateHealthMonitorAction(t *testing.T) {
 
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -353,6 +377,8 @@ func TestCreateHealthMonitorAction(t *testing.T) {
 }
 
 func TestUpdateMonitorHTTPMethod(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/health-monitors"+
@@ -365,7 +391,7 @@ func TestUpdateMonitorHTTPMethod(t *testing.T) {
 
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -376,6 +402,8 @@ func TestUpdateMonitorHTTPMethod(t *testing.T) {
 }
 
 func TestUpdateMonitorHTTPHost(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/health-monitors"+
@@ -389,7 +417,7 @@ func TestUpdateMonitorHTTPHost(t *testing.T) {
 
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -400,6 +428,8 @@ func TestUpdateMonitorHTTPHost(t *testing.T) {
 }
 
 func TestUpdateMonitorHTTPPath(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/health-monitors"+
@@ -412,7 +442,7 @@ func TestUpdateMonitorHTTPPath(t *testing.T) {
 
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -423,6 +453,8 @@ func TestUpdateMonitorHTTPPath(t *testing.T) {
 }
 
 func TestUpdateMonitorHTTPExpectedCodes(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/health-monitors"+
@@ -435,7 +467,7 @@ func TestUpdateMonitorHTTPExpectedCodes(t *testing.T) {
 
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -446,6 +478,8 @@ func TestUpdateMonitorHTTPExpectedCodes(t *testing.T) {
 }
 
 func TestUpdateMonitorNumberAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On(
 		"/v1/load-balancers/health-monitors"+
@@ -461,7 +495,7 @@ func TestUpdateMonitorNumberAction(t *testing.T) {
 	)
 	assert.NotEmpty(t, action.Label())
 
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)
 
@@ -477,7 +511,7 @@ func TestUpdateMonitorNumberAction(t *testing.T) {
 		"timeout-s",
 	)
 
-	_, _ = action.Run(context.Background(), server.Client())
+	_, _ = action.Run(t.Context(), server.Client())
 	server.LastSent(&sent)
 	assert.Equal(t, 1, sent.TimeoutS)
 
@@ -488,7 +522,7 @@ func TestUpdateMonitorNumberAction(t *testing.T) {
 		"up-threshold",
 	)
 
-	_, _ = action.Run(context.Background(), server.Client())
+	_, _ = action.Run(t.Context(), server.Client())
 	server.LastSent(&sent)
 	assert.Equal(t, 1, sent.UpThreshold)
 
@@ -499,7 +533,7 @@ func TestUpdateMonitorNumberAction(t *testing.T) {
 		"down-threshold",
 	)
 
-	_, _ = action.Run(context.Background(), server.Client())
+	_, _ = action.Run(t.Context(), server.Client())
 	server.LastSent(&sent)
 	assert.Equal(t, 1, sent.DownThreshold)
 
@@ -510,12 +544,14 @@ func TestUpdateMonitorNumberAction(t *testing.T) {
 		"foo",
 	)
 
-	v, err = action.Run(context.Background(), server.Client())
+	v, err = action.Run(t.Context(), server.Client())
 	assert.Error(t, err)
 	assert.Equal(t, Errored, v)
 }
 
 func TestAssignFloatingIPAction(t *testing.T) {
+	t.Parallel()
+
 	server := testkit.NewMockAPIServer()
 	server.On("/v1/floating-ips/100.1.1.1", 201, "{}")
 	server.Start()
@@ -525,7 +561,7 @@ func TestAssignFloatingIPAction(t *testing.T) {
 		"100.1.1.1/24", "00000000-0000-0000-0000-000000000000")
 
 	assert.NotEmpty(t, action.Label())
-	v, err := action.Run(context.Background(), server.Client())
+	v, err := action.Run(t.Context(), server.Client())
 
 	assert.NoError(t, err)
 	assert.Equal(t, Proceed, v)

@@ -19,41 +19,45 @@ import (
 
 const (
 	// Under no circumstances can this string change. It is for eternity.
-	ProviderName   = "cloudscale"
+	ProviderName = "cloudscale"
+
+	// #nosec G101
 	AccessToken    = "CLOUDSCALE_ACCESS_TOKEN"
 	ApiUrl         = "CLOUDSCALE_API_URL"
 	ApiTimeout     = "CLOUDSCALE_API_TIMEOUT"
 	DefaultTimeout = time.Duration(20) * time.Second
 )
 
-// cloud implements cloudprovider.Interface
+// cloud implements cloudprovider.Interface.
 type cloud struct {
 	instances    *instances
 	loadbalancer *loadbalancer
 }
 
-// Register this provider with Kubernetes
+// Register this provider with Kubernetes.
 func init() {
 	cloudprovider.RegisterCloudProvider(ProviderName, newCloudscaleProvider)
 }
 
-// maskAccessToken returns the given token with most of the information hidden
+// maskAccessToken returns the given token with most of the information hidden.
 func maskAccessToken(token string) string {
 	if len(token) < 4 {
 		return ""
 	}
+
 	return fmt.Sprintf("%.4s%s", token, strings.Repeat("*", len(token)-4))
 }
 
-// apiTimeout returns the configured timeout or the default one
+// apiTimeout returns the configured timeout or the default one.
 func apiTimeout() time.Duration {
 	if seconds, _ := strconv.Atoi(os.Getenv(ApiTimeout)); seconds > 0 {
 		return time.Duration(seconds) * time.Second
 	}
+
 	return DefaultTimeout
 }
 
-// newCloudscaleProvider creates the provider, ready to be registered
+// newCloudscaleProvider creates the provider, ready to be registered.
 func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 	if config != nil {
 		klog.Warning("--cloud-config received but ignored")
@@ -77,7 +81,7 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 	}, nil
 }
 
-// newCloudscaleClient spawns a new cloudscale API client
+// newCloudscaleClient spawns a new cloudscale API client.
 func newCloudscaleClient(
 	token string, timeout time.Duration) *cloudscale.Client {
 
@@ -159,7 +163,7 @@ func (c *cloud) ProviderName() string {
 	return ProviderName
 }
 
-// HasClusterID returns true if a ClusterID is required and set
+// HasClusterID returns true if a ClusterID is required and set.
 func (c *cloud) HasClusterID() bool {
 	return false
 }

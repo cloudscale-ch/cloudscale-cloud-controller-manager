@@ -18,7 +18,6 @@ require (
 	github.com/cloudscale-ch/cloudscale-go-sdk/v4 v4.0.0
 	github.com/google/uuid v1.5.0
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	k8s.io/client-go v0.29.0
 	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 )
@@ -87,6 +86,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/crypto v0.17.0 // indirect
+	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc // indirect
 	golang.org/x/net v0.19.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
