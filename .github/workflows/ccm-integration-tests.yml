@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: 1.22
+  GO_VERSION: 1.24
 
 jobs:
   lint:
@@ -40,11 +40,8 @@ jobs:
             ~/.cache/go-build
           key: lint-${{ hashFiles('go.mod') }}
 
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.2
-
-      - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@2023.1.6
+      - name: Install go tools
+        run: go mod tidy -modfile tool.mod
 
       - name: Run Linter
         run: make lint

@@ -1,6 +1,6 @@
 module github.com/cloudscale-ch/cloudscale-cloud-controller-manager
 
-go 1.22
+go 1.24
 
 // https://github.com/kubernetes/apiserver/issues/97
 replace github.com/google/cel-go => github.com/google/cel-go v0.17.7
@@ -20,6 +20,7 @@ require (
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/exp v0.0.0-20240103183307-be819d1f06fc
 	k8s.io/client-go v0.29.0
+	k8s.io/utils v0.0.0-20240102154912-e7106e64919e
 )
 
 require (
@@ -107,7 +108,6 @@ require (
 	k8s.io/controller-manager v0.29.0 // indirect
 	k8s.io/kms v0.29.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20240105020646-a37d4de58910 // indirect
-	k8s.io/utils v0.0.0-20240102154912-e7106e64919e // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
