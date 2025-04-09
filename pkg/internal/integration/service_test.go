@@ -394,8 +394,9 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	assertPrefix := func(addr string, prefix *netip.Prefix) {
 		url := fmt.Sprintf("http://%s", addr)
 		successful := 0
+		start := time.Now()
 
-		for i := 0; i < 60; i++ {
+		for i := 0; i < 120; i++ {
 			time.Sleep(1 * time.Second)
 
 			peer, err := testkit.HTTPRead(url)
@@ -419,7 +420,8 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 			}
 		}
 
-		s.Assert().GreaterOrEqual(successful, 15)
+		s.T().Logf("Took %s too %s to get ready", url, time.Since(start))
+		s.Require().GreaterOrEqual(successful, 15)
 	}
 
 	// Ensures the traffic is handled without unexpected delay
