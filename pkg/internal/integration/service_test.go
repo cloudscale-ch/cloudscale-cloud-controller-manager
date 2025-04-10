@@ -255,7 +255,15 @@ func (s *IntegrationTestSuite) AwaitServiceReady(
 
 		if service.Annotations != nil {
 			uuid := service.Annotations["k8s.cloudscale.ch/loadbalancer-uuid"]
-			if uuid != "" {
+
+			// EnsureLoadBalancer sets the annotation, and then returns the
+			// load balancer status to Kubernetes. This means there is a short
+			// window between setting the annotation, and the service receving
+			// its load balancer configuration.
+			//
+			// To avoid races, we therefore have to check for the annotation,
+			// as well as the load balancer state.
+			if uuid != "" && len(service.Status.LoadBalancer.Ingress) > 0 {
 				return service
 			}
 		}
@@ -394,8 +402,9 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	assertPrefix := func(addr string, prefix *netip.Prefix) {
 		url := fmt.Sprintf("http://%s", addr)
 		successful := 0
+		start := time.Now()
 
-		for i := 0; i < 60; i++ {
+		for i := 0; i < 120; i++ {
 			time.Sleep(1 * time.Second)
 
 			peer, err := testkit.HTTPRead(url)
@@ -419,7 +428,8 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 			}
 		}
 
-		s.Assert().GreaterOrEqual(successful, 15)
+		s.T().Logf("Took %s too %s to get ready", url, time.Since(start))
+		s.Require().GreaterOrEqual(successful, 15)
 	}
 
 	// Ensures the traffic is handled without unexpected delay
