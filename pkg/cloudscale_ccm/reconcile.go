@@ -12,7 +12,7 @@ import (
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/actions"
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/compare"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )

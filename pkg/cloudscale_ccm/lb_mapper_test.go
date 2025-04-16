@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	"github.com/stretchr/testify/assert"
 )
 

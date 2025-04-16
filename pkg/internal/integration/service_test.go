@@ -16,7 +16,7 @@ import (
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/cloudscale_ccm"
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/kubeutil"
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
-	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v4"
+	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 )
 
 type Action interface {
@@ -256,7 +256,7 @@ func (a *CreateListenerAction) Run(
 			Name:                   a.listener.Name,
 			Protocol:               a.listener.Protocol,
 			ProtocolPort:           a.listener.ProtocolPort,
-			AllowedCIDRs:           a.listener.AllowedCIDRs,
+			AllowedCIDRs:           &a.listener.AllowedCIDRs,
 			TimeoutClientDataMS:    a.listener.TimeoutClientDataMS,
 			TimeoutMemberConnectMS: a.listener.TimeoutMemberConnectMS,
 			TimeoutMemberDataMS:    a.listener.TimeoutMemberDataMS,
@@ -292,7 +292,7 @@ func (a *UpdateListenerAllowedCIDRsAction) Run(
 	err := client.LoadBalancerListeners.Update(ctx,
 		a.listenerUUID,
 		&cloudscale.LoadBalancerListenerRequest{
-			AllowedCIDRs: a.allowedCIDRs,
+			AllowedCIDRs: &a.allowedCIDRs,
 		},
 	)
 

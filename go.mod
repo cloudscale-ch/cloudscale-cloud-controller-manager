@@ -6,7 +6,7 @@ go 1.24
 replace github.com/google/cel-go => github.com/google/cel-go v0.17.7
 
 require (
-	golang.org/x/oauth2 v0.15.0
+	golang.org/x/oauth2 v0.29.0
 	k8s.io/api v0.29.0
 	k8s.io/apimachinery v0.29.0
 	k8s.io/cloud-provider v0.29.0
@@ -15,7 +15,7 @@ require (
 )
 
 require (
-	github.com/cloudscale-ch/cloudscale-go-sdk/v4 v4.0.0
+	github.com/cloudscale-ch/cloudscale-go-sdk/v6 v6.0.0
 	github.com/google/uuid v1.5.0
 	github.com/stretchr/testify v1.8.4
 	k8s.io/client-go v0.29.0
@@ -30,6 +30,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
+	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
@@ -93,7 +94,6 @@ require (
 	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20240102182953-50ed04b92917 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240102182953-50ed04b92917 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240102182953-50ed04b92917 // indirect

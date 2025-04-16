@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v4"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -237,7 +237,7 @@ func TestCreateListenerAction(t *testing.T) {
 	assert.Equal(t, "00000000-0000-0000-0000-000000000000", sent.Pool)
 	assert.Equal(t, "tcp", sent.Protocol)
 	assert.Equal(t, 80, sent.ProtocolPort)
-	assert.Equal(t, []string{"10.0.0.0/24"}, sent.AllowedCIDRs)
+	assert.Equal(t, []string{"10.0.0.0/24"}, *sent.AllowedCIDRs)
 	assert.Equal(t, 1, sent.TimeoutClientDataMS)
 	assert.Equal(t, 2, sent.TimeoutMemberConnectMS)
 	assert.Equal(t, 3, sent.TimeoutMemberDataMS)
@@ -265,7 +265,7 @@ func TestUpdateListenerAllowedCIDRsAction(t *testing.T) {
 	var sent cloudscale.LoadBalancerListenerRequest
 	server.LastSent(&sent)
 
-	assert.Equal(t, []string{"10.0.0.0/24"}, sent.AllowedCIDRs)
+	assert.Equal(t, []string{"10.0.0.0/24"}, *sent.AllowedCIDRs)
 }
 
 func TestUpdateListenerTimeoutAction(t *testing.T) {
