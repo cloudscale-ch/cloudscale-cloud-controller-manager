@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/limiter"
-	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v4"
+	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 )
 
 // lbMapper maps cloudscale loadbalancers to Kubernetes services.

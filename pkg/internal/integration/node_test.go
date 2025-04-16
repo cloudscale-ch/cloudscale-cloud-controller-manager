@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v4"
+	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
