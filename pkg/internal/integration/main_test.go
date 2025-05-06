@@ -16,7 +16,9 @@ import (
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/oauth2"
 	v1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -178,6 +180,39 @@ func (s *IntegrationTestSuite) TearDownTest() {
 
 	if err != nil {
 		s.T().Logf("could not delete namespace %s: %s", s.ns, err)
+		errors++
+	}
+
+	// Wait up to two minutes for the namespace to be deleted
+	timeout := 120 * time.Second
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	err = wait.PollUntilContextCancel(ctx, 1*time.Second, true,
+		func(ctx context.Context) (bool, error) {
+			_, err := s.k8s.CoreV1().Namespaces().Get(
+				ctx,
+				s.ns,
+				metav1.GetOptions{},
+			)
+
+			// Not found, we are done
+			if k8serrors.IsNotFound(err) {
+				return true, nil
+			}
+
+			// Another error, fail
+			if err != nil {
+				return false, err
+			}
+
+			// Found, try again
+			return false, nil
+		})
+
+	if err != nil {
+		s.T().Logf("took too long to delete namespace %s: %s", s.ns, err)
 		errors++
 	}
 
