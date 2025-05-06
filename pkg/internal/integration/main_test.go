@@ -183,8 +183,8 @@ func (s *IntegrationTestSuite) TearDownTest() {
 		errors++
 	}
 
-	// Wait up to two minutes for the namespace to be deleted
-	timeout := 120 * time.Second
+	// Wait up to five minutes for the namespace to be deleted
+	timeout := 5 * time.Minute
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
