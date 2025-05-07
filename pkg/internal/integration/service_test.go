@@ -375,7 +375,10 @@ func (s *IntegrationTestSuite) TestServiceVIPAddresses() {
 
 	cmd := exec.Command(
 		"ssh", fmt.Sprintf("ubuntu@%s", public), "-i", s.sshkey,
-		fmt.Sprintf("curl -s http://%s", addr),
+		fmt.Sprintf(
+			"curl -s --retry 3 --retry-delay 3 --retry-all-errors http://%s",
+			addr,
+		),
 	)
 	out, err := cmd.Output()
 	s.Require().NoError(err)
