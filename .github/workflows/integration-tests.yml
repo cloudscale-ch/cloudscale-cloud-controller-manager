@@ -150,7 +150,7 @@ jobs:
     # Instead we ensure that only one integration test per supported version
     # is run at any given time.
     concurrency:
-      group: integration-${{ matrix.kubernetes }}
+      group: integration-tests-${{ matrix.kubernetes }}
 
     steps:
       - uses: actions/checkout@v4
