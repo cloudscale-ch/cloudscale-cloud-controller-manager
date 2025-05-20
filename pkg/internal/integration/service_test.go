@@ -404,10 +404,12 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	// ten responses with the expected address come back.
 	assertPrefix := func(addr string, prefix *netip.Prefix) {
 		url := fmt.Sprintf("http://%s", addr)
-		successful := 0
+		successes := 0
+		successesRequired := 15
 		start := time.Now()
+		timeout := 120
 
-		for i := 0; i < 120; i++ {
+		for i := 0; i < timeout; i++ {
 			time.Sleep(1 * time.Second)
 
 			peer, err := testkit.HTTPRead(url)
@@ -424,15 +426,23 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 				continue
 			}
 
-			successful++
+			successes++
 
-			if successful >= 15 {
+			if successes >= successesRequired {
 				break
 			}
 		}
 
-		s.T().Logf("Took %s too %s to get ready", url, time.Since(start))
-		s.Require().GreaterOrEqual(successful, 15)
+		took := time.Since(start).Round(time.Second)
+
+		if successes >= successesRequired {
+			s.T().Logf("Took %s %s to get ready", url, took)
+		} else {
+			s.T().Logf("Took %s too long to get ready (%s)", url, took)
+			s.T().Logf("CCM Logs: \n%s", s.CCMLogs(start))
+		}
+
+		s.Require().GreaterOrEqual(successes, successesRequired)
 	}
 
 	// Ensures the traffic is handled without unexpected delay
