@@ -7,9 +7,16 @@ ensure-k8test > /dev/null
 
 # Returns the matrix entry for the given index (1-n)
 function matrixentry {
+  # Kubernetes releases
   k8test/helpers/release-set --kubernetes=$(( 1 - $1 )) --limit kubernetes | jq -r '.kubernetes.version'
+
+  # The the private subnet range
   echo "10.100.$1.0/24"
-  echo "k8test-$(uuidgen | tr '[:upper:]' '[:lower:]' | cut -d '-' -f 1)"
+
+  # A semi-preditable cluster prefix (we want to reuse them across jobs, but
+  # not inside a job). Reuse allows us to ensure that the cleanup process
+  # at the beginning of a test will remove old runs.
+  echo "k8test-matrix-$1"
 }
 
 function matrixobject {
