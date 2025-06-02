@@ -131,6 +131,7 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include: "${{ fromJson(needs.test-matrix.outputs.tests) }}"
 
