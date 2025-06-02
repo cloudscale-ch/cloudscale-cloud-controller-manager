@@ -175,6 +175,10 @@ jobs:
       - name: Stagger tests
         run: 'sleep $((RANDOM % 60 + 1))'
 
+      - name: Cleanup Leftovers
+        if: always()
+        run: helpers/cleanup
+
       - name: Create Test Cluster
         run: helpers/run-in-test-cluster
 
