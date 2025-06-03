@@ -19,7 +19,12 @@ function ensure-k8test() {
   # on the runners and cloning via SSH does not work.
   #
   # Therefore we run a separate install block that is only meant for GitHub.
-  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  if [[ "${GITHUB_ACTIONS:-}" == "true" ]] then
+    if test -d k8test; then
+      source k8test/venv/bin/activate 
+      return
+    fi
+
     mkdir -p ~/.ssh/ && touch ~/.ssh/known_hosts
     git clone https://github.com/cloudscale-ch/k8test
     python3 -m venv k8test/venv
