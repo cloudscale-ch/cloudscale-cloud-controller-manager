@@ -173,9 +173,6 @@ jobs:
       - name: Evaluate image name
         run: 'helpers/image-from-ref >> $GITHUB_ENV'
 
-      - name: Stagger tests
-        run: 'sleep $((RANDOM % 60 + 1))'
-
       - name: Cleanup Leftovers
         if: always()
         run: helpers/cleanup
