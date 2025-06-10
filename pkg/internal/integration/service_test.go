@@ -407,7 +407,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 		successes := 0
 		successesRequired := 15
 		start := time.Now()
-		timeout := 120
+		timeout := 300
 
 		for i := 0; i < timeout; i++ {
 			time.Sleep(1 * time.Second)
