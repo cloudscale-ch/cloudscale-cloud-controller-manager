@@ -13,7 +13,7 @@ on:
   # Run this regularly, to get integration tests results against new
   # Kubernetes releases.
   schedule:
-    - cron: '15 15 * * *'
+    - cron: '15 13 * * *'
 
 permissions:
   contents: read
