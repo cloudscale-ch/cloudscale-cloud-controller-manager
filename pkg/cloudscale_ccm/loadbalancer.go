@@ -21,12 +21,11 @@ import (
 // them, unless you know what you are doing.
 const (
 	// LoadBalancerUUID uniquely identifes the loadbalancer. This annotation
-	// should not be provided by the customer, unless the adoption of an
-	// existing load balancer is desired.
+	// should not be provided by the customer.
 	//
-	// In all other cases, this value is set by the CCM after creating the
-	// load balancer, to ensure that we track it with a proper ID and not
-	// a name that might change without our knowledge.
+	// Instead, this value is set by the CCM after creating the load balancer,
+	// to ensure that we track it with a proper ID and not a name that might
+	// change without our knowledge.
 	LoadBalancerUUID = "k8s.cloudscale.ch/loadbalancer-uuid"
 
 	// LoadBalancerConfigVersion is set by the CCM when it first handles a

@@ -20,8 +20,19 @@ func (l *lbMapper) findByServiceInfo(
 	serviceInfo *serviceInfo,
 ) *limiter.Limiter[cloudscale.LoadBalancer] {
 
+	// If we have a UUID, look for both the service and the UUID. Usually
+	// we expect to only see one, but it is possible for the UUID to point
+	// to another LB than the service name, in which case we return both
+	// so the caller can decide if that is sane or not.
 	if uuid := serviceInfo.annotation(LoadBalancerUUID); uuid != "" {
-		return l.getByUUID(ctx, uuid)
+		return limiter.Join(
+			l.getByUUID(ctx, uuid),
+			l.findByName(ctx, serviceInfo.annotation(LoadBalancerName)),
+		).Unique(
+			func(a *cloudscale.LoadBalancer, b *cloudscale.LoadBalancer) bool {
+				return a.UUID == b.UUID
+			},
+		)
 	}
 
 	return l.findByName(ctx, serviceInfo.annotation(LoadBalancerName))
