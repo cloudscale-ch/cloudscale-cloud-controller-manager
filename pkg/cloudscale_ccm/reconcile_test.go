@@ -397,16 +397,16 @@ func TestNextLbActions(t *testing.T) {
 	// Rename lb if name changed. This is safe because the lbs have either
 	// been acquired by name (in which case both will have the same name),
 	// or by UUID through the service annotation.
-	one := &cloudscale.LoadBalancer{
+	want := &cloudscale.LoadBalancer{
 		Name: "foo",
 	}
-	two := &cloudscale.LoadBalancer{
+	have := &cloudscale.LoadBalancer{
 		UUID: "2",
 		Name: "bar",
 	}
-	assertActions(&lbState{lb: one}, &lbState{lb: two}, []actions.Action{
-		actions.AwaitLb(two),
-		actions.RenameLb("2", "bar"),
+	assertActions(&lbState{lb: want}, &lbState{lb: have}, []actions.Action{
+		actions.AwaitLb(have),
+		actions.RenameLb("2", "foo"),
 	})
 }
 
