@@ -464,7 +464,7 @@ func nextLbActions(
 
 	// If the name of the lb is wrong, change it
 	if desired.lb.Name != actual.lb.Name {
-		next = append(next, actions.RenameLb(actual.lb.UUID, actual.lb.Name))
+		next = append(next, actions.RenameLb(actual.lb.UUID, desired.lb.Name))
 	}
 
 	// All other changes are applied aggressively, as the customer would have
