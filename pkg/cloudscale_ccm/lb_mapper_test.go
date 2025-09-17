@@ -37,6 +37,7 @@ func TestFindLoadBalancer(t *testing.T) {
 	lb, err := lbs.One()
 	assert.NoError(t, err)
 	assert.Equal(t, "foo", lb.Name)
+	assert.Equal(t, 1, lbs.Count())
 
 	// Using an ambiguous name
 	s.Annotations[LoadBalancerName] = "clone"
@@ -44,12 +45,34 @@ func TestFindLoadBalancer(t *testing.T) {
 	lbs = mapper.findByServiceInfo(t.Context(), i)
 	_, err = lbs.One()
 	assert.Error(t, err)
+	assert.Equal(t, 2, lbs.Count())
 
-	// Using a uuid
+	// Using a unique name and a mismatched uuid
+	s.Annotations[LoadBalancerName] = "foo"
 	s.Annotations[LoadBalancerUUID] = "85dffa20-8097-4d75-afa6-9e4372047ce6"
+
+	lbs = mapper.findByServiceInfo(t.Context(), i)
+	_, err = lbs.One()
+	assert.Error(t, err)
+	assert.Equal(t, 2, lbs.Count())
+
+	// Using a unique name and a missing uuid
+	s.Annotations[LoadBalancerName] = "foo"
+	s.Annotations[LoadBalancerUUID] = "00000000-0000-0000-0000-000000000000"
 
 	lbs = mapper.findByServiceInfo(t.Context(), i)
 	lb, err = lbs.One()
 	assert.NoError(t, err)
-	assert.Equal(t, "clone", lb.Name)
+	assert.Equal(t, "foo", lb.Name)
+	assert.Equal(t, 1, lbs.Count())
+
+	// Using a unique name and a matching uuid
+	s.Annotations[LoadBalancerName] = "foo"
+	s.Annotations[LoadBalancerUUID] = "c2e4aabd-8c91-46da-b069-71e01f439806"
+
+	lbs = mapper.findByServiceInfo(t.Context(), i)
+	lb, err = lbs.One()
+	assert.NoError(t, err)
+	assert.Equal(t, "foo", lb.Name)
+	assert.Equal(t, 1, lbs.Count())
 }

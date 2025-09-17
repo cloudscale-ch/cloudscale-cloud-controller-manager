@@ -19,16 +19,16 @@ function ensure-k8test() {
   # on the runners and cloning via SSH does not work.
   #
   # Therefore we run a separate install block that is only meant for GitHub.
-  if [[ "${GITHUB_ACTIONS:-}" == "true" ]] then
+  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
     if test -d k8test; then
-      source k8test/venv/bin/activate 
+      source k8test/venv/bin/activate
       return
     fi
 
     mkdir -p ~/.ssh/ && touch ~/.ssh/known_hosts
     git clone https://github.com/cloudscale-ch/k8test
     python3 -m venv k8test/venv
-    source k8test/venv/bin/activate 
+    source k8test/venv/bin/activate
     pip install poetry
     poetry install --directory k8test
     return
@@ -74,7 +74,7 @@ function ensure-cluster() {
   if ! test -f k8test/cluster/ssh.pub; then
     ssh-keygen -t ed25519 -N '' -f k8test/cluster/ssh
   fi
- 
+
   if ! test -f k8test/cluster/admin.conf; then
     zone="$(random-zone)"
 
@@ -107,7 +107,7 @@ function ensure-cluster() {
       -e kubelet_extra_args='--cloud-provider=external' \
       -e kubernetes="${KUBERNETES}" \
       -e cluster_prefix="${CLUSTER_PREFIX}" \
-      -e subnet="${SUBNET}"    
+      -e subnet="${SUBNET}"
   fi
 }
 

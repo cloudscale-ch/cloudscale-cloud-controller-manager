@@ -202,79 +202,117 @@ func TestDesiredService(t *testing.T) {
 func TestActualState(t *testing.T) {
 	t.Parallel()
 
-	server := testkit.NewMockAPIServer()
-	server.WithLoadBalancers([]cloudscale.LoadBalancer{
+	testCases := []struct {
+		name        string
+		annotations map[string]string
+	}{
 		{
-			UUID: "00000000-0000-0000-0000-000000000000",
-			Name: "k8test-service-test",
-		},
-	})
-	server.On("/v1/load-balancers/pools", 200, []cloudscale.LoadBalancerPool{
-		{
-			Name: "tcp/80",
-			UUID: "00000000-0000-0000-0000-000000000001",
-			LoadBalancer: cloudscale.LoadBalancerStub{
-				UUID: "00000000-0000-0000-0000-000000000000",
+			name: "by UUID only",
+			annotations: map[string]string{
+				LoadBalancerUUID: "00000000-0000-0000-0000-000000000000",
 			},
 		},
-	})
-	server.On("/v1/load-balancers/pools/00000000-0000-0000-0000-000000000001"+
-		"/members", 200, []cloudscale.LoadBalancerPoolMember{
 		{
-			Name: "10.0.0.1:8080",
-			Pool: cloudscale.LoadBalancerPoolStub{
-				UUID: "00000000-0000-0000-0000-000000000001",
+			name: "by Name only",
+			annotations: map[string]string{
+				LoadBalancerName: "k8test-service-test",
 			},
 		},
-	})
-	server.On("/v1/load-balancers/listeners", 200,
-		[]cloudscale.LoadBalancerListener{
-			{
-				Name: "tcp/80",
-				Pool: &cloudscale.LoadBalancerPoolStub{
-					UUID: "00000000-0000-0000-0000-000000000001",
+		{
+			name: "by matching UUID and Name",
+			annotations: map[string]string{
+				LoadBalancerUUID: "00000000-0000-0000-0000-000000000000",
+				LoadBalancerName: "k8test-service-test",
+			},
+		},
+		{
+			name: "by none-matching UUID and Name, name has precedence",
+			annotations: map[string]string{
+				LoadBalancerUUID: "00000000-0000-ffff-0000-000000000000",
+				LoadBalancerName: "k8test-service-test",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := testkit.NewMockAPIServer()
+			server.WithLoadBalancers([]cloudscale.LoadBalancer{
+				{
+					UUID: "00000000-0000-0000-0000-000000000000",
+					Name: "k8test-service-test",
 				},
-			},
-		},
-	)
-	server.On("/v1/load-balancers/health-monitors", 200,
-		[]cloudscale.LoadBalancerHealthMonitor{
-			{
-				Type: "tcp",
-				Pool: cloudscale.LoadBalancerPoolStub{
-					UUID: "00000000-0000-0000-0000-000000000001",
+			})
+			server.On("/v1/load-balancers/pools", 200,
+				[]cloudscale.LoadBalancerPool{
+					{
+						Name: "tcp/80",
+						UUID: "00000000-0000-0000-0000-000000000001",
+						LoadBalancer: cloudscale.LoadBalancerStub{
+							UUID: "00000000-0000-0000-0000-000000000000",
+						},
+					},
+				})
+			server.On("/v1/load-balancers/pools/"+
+				"00000000-0000-0000-0000-000000000001/members", 200,
+				[]cloudscale.LoadBalancerPoolMember{
+					{
+						Name: "10.0.0.1:8080",
+						Pool: cloudscale.LoadBalancerPoolStub{
+							UUID: "00000000-0000-0000-0000-000000000001",
+						},
+					},
+				})
+			server.On("/v1/load-balancers/listeners", 200,
+				[]cloudscale.LoadBalancerListener{
+					{
+						Name: "tcp/80",
+						Pool: &cloudscale.LoadBalancerPoolStub{
+							UUID: "00000000-0000-0000-0000-000000000001",
+						},
+					},
 				},
-			},
-		},
-	)
-	server.On("/v1/floating-ips", 200,
-		[]cloudscale.FloatingIP{},
-	)
-	server.Start()
-	defer server.Close()
+			)
+			server.On("/v1/load-balancers/health-monitors", 200,
+				[]cloudscale.LoadBalancerHealthMonitor{
+					{
+						Type: "tcp",
+						Pool: cloudscale.LoadBalancerPoolStub{
+							UUID: "00000000-0000-0000-0000-000000000001",
+						},
+					},
+				},
+			)
+			server.On("/v1/floating-ips", 200,
+				[]cloudscale.FloatingIP{},
+			)
+			server.Start()
+			defer server.Close()
 
-	mapper := lbMapper{client: server.Client()}
+			mapper := lbMapper{client: server.Client()}
 
-	s := testkit.NewService("service").V1()
-	s.Annotations = make(map[string]string)
-	s.Annotations[LoadBalancerUUID] = "00000000-0000-0000-0000-000000000000"
+			s := testkit.NewService("service").V1()
+			s.Annotations = tc.annotations
+			i := newServiceInfo(s, "")
 
-	i := newServiceInfo(s, "")
+			actual, err := actualLbState(t.Context(), &mapper, i)
+			assert.NoError(t, err)
 
-	actual, err := actualLbState(t.Context(), &mapper, i)
-	assert.NoError(t, err)
+			assert.Equal(t, "k8test-service-test", actual.lb.Name)
+			assert.Len(t, actual.pools, 1)
+			assert.Len(t, actual.members, 1)
+			assert.Len(t, actual.listeners, 1)
+			assert.Len(t, actual.monitors, 1)
 
-	assert.Equal(t, "k8test-service-test", actual.lb.Name)
-	assert.Len(t, actual.pools, 1)
-	assert.Len(t, actual.members, 1)
-	assert.Len(t, actual.listeners, 1)
-	assert.Len(t, actual.monitors, 1)
-
-	p := actual.pools[0]
-	assert.Equal(t, "tcp/80", p.Name)
-	assert.Equal(t, "10.0.0.1:8080", actual.members[p][0].Name)
-	assert.Equal(t, "tcp/80", actual.listeners[p][0].Name)
-	assert.Equal(t, "tcp", actual.monitors[p][0].Type)
+			p := actual.pools[0]
+			assert.Equal(t, "tcp/80", p.Name)
+			assert.Equal(t, "10.0.0.1:8080", actual.members[p][0].Name)
+			assert.Equal(t, "tcp/80", actual.listeners[p][0].Name)
+			assert.Equal(t, "tcp", actual.monitors[p][0].Type)
+		})
+	}
 }
 
 func TestNextLbActionsInvalidCalls(t *testing.T) {
