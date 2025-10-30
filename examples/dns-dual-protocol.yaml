@@ -1,0 +1,94 @@
+# Deploys a DNS server container and creates a loadbalancer service for it with both UDP and TCP:
+#
+#     export KUBECONFIG=path/to/kubeconfig
+#     kubectl apply -f dns-dual-protocol.yaml
+#
+# Wait for `kubectl describe service dns-server` to show "Loadbalancer Ensured",
+# then use the IP address found under "LoadBalancer Ingress" to connect to the
+# service.
+#
+# You can test the DNS service with dig:
+#
+#     # Test UDP (default)
+#     dig @$(kubectl get service dns-server -o jsonpath='{.status.loadBalancer.ingress[0].ip}') example.com
+#
+#     # Test TCP explicitly
+#     dig +tcp @$(kubectl get service dns-server -o jsonpath='{.status.loadBalancer.ingress[0].ip}') example.com
+#
+# To view the logs:
+#
+#     kubectl logs -l "app=dns-server"
+#
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-config
+data:
+  Corefile: |
+    .:53 {
+        log
+        errors
+        health
+        ready
+        whoami
+        forward . 8.8.8.8 9.9.9.9
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dns-server
+  template:
+    metadata:
+      labels:
+        app: dns-server
+    spec:
+      containers:
+        - name: coredns
+          image: coredns/coredns:1.11.1
+          args:
+            - -conf
+            - /etc/coredns/Corefile
+          volumeMounts:
+            - name: config
+              mountPath: /etc/coredns
+          ports:
+            - containerPort: 53
+              protocol: UDP
+              name: dns-udp
+            - containerPort: 53
+              protocol: TCP
+              name: dns-tcp
+      volumes:
+        - name: config
+          configMap:
+            name: coredns-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    k8s.cloudscale.ch/loadbalancer-health-monitor-delay-s: "3"
+    k8s.cloudscale.ch/loadbalancer-health-monitor-timeout-s: "2"
+  labels:
+    app: dns-server
+  name: dns-server
+spec:
+  ports:
+    - port: 53
+      protocol: UDP
+      targetPort: 53
+      name: dns-udp
+    - port: 53
+      protocol: TCP
+      targetPort: 53
+      name: dns-tcp
+  selector:
+    app: dns-server
+  type: LoadBalancer

@@ -115,8 +115,14 @@ const (
 	// as all pools have to be recreated.
 	LoadBalancerPoolAlgorithm = "k8s.cloudscale.ch/loadbalancer-pool-algorithm"
 
-	// LoadBalancerPoolProtocol defines the protocol for all the pools of the
-	// service. We are technically able to have different protocols for
+	// LoadBalancerPoolProtocol defines the protocol the pools of a port
+	// with protocol `TCP` use. Set it to `proxy` and `proxyv2` if TCP
+	// traffic should be forwarded using these protocols.
+	//
+	// When setting the protocol of a port to `UDP,` traffic is always forwarded
+	// using UDP.
+	//
+	// We are technically able to have different protocols for
 	// different ports in a service, but as our options apart from `tcp` are
 	// currently `proxy` and `proxyv2`, we go with Kubernetes's recommendation
 	// to apply these protocols to all incoming connections the same way:
@@ -216,6 +222,8 @@ const (
 	// LoadBalancerHealthMonitorType defines the approach the monitor takes.
 	// (ping, tcp, http, https, tls-hello).
 	//
+	// Note that the same type is used for all ports in your service.
+	//
 	// See https://www.cloudscale.ch/en/api/v1#health-monitor-types
 	//
 	// Changing this annotation on an active service may lead to new
@@ -232,6 +240,9 @@ const (
 
 	// LoadBalancerListenerProtocol defines the protocol used by the listening
 	// port on the loadbalancer. Currently, only tcp is supported.
+	//
+	// This property is ignored for ports with the protocol `UDP`, where
+	// we always create udp listeners.
 	//
 	// See https://www.cloudscale.ch/en/api/v1#listener-protocols
 	//

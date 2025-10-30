@@ -199,6 +199,213 @@ func TestDesiredService(t *testing.T) {
 	}
 }
 
+func TestDesiredServiceUDP(t *testing.T) {
+	t.Parallel()
+
+	s := testkit.NewService("service").V1()
+	i := newServiceInfo(s, "")
+
+	nodes := []*v1.Node{
+		testkit.NewNode("worker-1").V1(),
+		testkit.NewNode("worker-2").V1(),
+	}
+
+	servers := []cloudscale.Server{
+		{
+			Name: "worker-1",
+			ZonalResource: cloudscale.ZonalResource{
+				Zone: cloudscale.Zone{Slug: "rma1"},
+			},
+			Interfaces: []cloudscale.Interface{{
+				Addresses: []cloudscale.Address{{
+					Address: "10.0.0.1",
+					Subnet: cloudscale.SubnetStub{
+						UUID: "00000000-0000-0000-0000-000000000000",
+					},
+				}},
+			}},
+		},
+		{
+			Name: "worker-2",
+			ZonalResource: cloudscale.ZonalResource{
+				Zone: cloudscale.Zone{Slug: "rma1"},
+			},
+			Interfaces: []cloudscale.Interface{{
+				Addresses: []cloudscale.Address{{
+					Address: "10.0.0.2",
+					Subnet: cloudscale.SubnetStub{
+						UUID: "00000000-0000-0000-0000-000000000000",
+					},
+				}},
+			}},
+		},
+	}
+
+	s.Annotations = map[string]string{
+		LoadBalancerHealthMonitorType:     "udp-connect",
+		LoadBalancerHealthMonitorDelayS:   "3",
+		LoadBalancerHealthMonitorTimeoutS: "2",
+	}
+	s.Spec.Ports = []v1.ServicePort{
+		{
+			Protocol: "UDP",
+			Port:     53,
+			NodePort: 30053,
+			Name:     "udp",
+		},
+	}
+
+	desired, err := desiredLbState(i, nodes, servers)
+	assert.NoError(t, err)
+
+	// Ensure the lb exists
+	assert.Equal(t, "lb-standard", desired.lb.Flavor.Slug)
+	assert.Len(t, desired.lb.VIPAddresses, 0)
+
+	// Have one pool per service port
+	assert.Len(t, desired.pools, 1)
+	assert.Equal(t, desired.pools[0].Name, "udp/udp")
+	assert.Equal(t, desired.pools[0].Protocol, "udp")
+	assert.Equal(t, desired.pools[0].Algorithm, "round_robin")
+
+	// One member per server
+	for _, pool := range desired.pools {
+		members := desired.members[pool]
+		assert.Len(t, members, 2)
+
+		assert.Equal(t, "10.0.0.1", members[0].Address)
+		assert.Equal(t, "10.0.0.2", members[1].Address)
+
+		assert.True(t, members[0].ProtocolPort == 30053)
+	}
+
+	// One listener per pool
+	for _, pool := range desired.pools {
+		listeners := desired.listeners[pool]
+		assert.Len(t, listeners, 1)
+
+		assert.Equal(t, "udp", listeners[0].Protocol)
+		assert.True(t, listeners[0].ProtocolPort == 53)
+	}
+
+	// One health monitor per pool
+	for _, pool := range desired.pools {
+		monitors := desired.monitors[pool]
+		assert.Len(t, monitors, 1)
+		assert.Equal(t, "udp-connect", monitors[0].Type)
+		assert.Equal(t, 3, monitors[0].DelayS)
+		assert.Equal(t, 2, monitors[0].TimeoutS)
+	}
+}
+
+func TestDesiredServiceDualProtocol(t *testing.T) {
+	t.Parallel()
+
+	s := testkit.NewService("service").V1()
+	i := newServiceInfo(s, "")
+
+	nodes := []*v1.Node{
+		testkit.NewNode("worker-1").V1(),
+		testkit.NewNode("worker-2").V1(),
+	}
+
+	servers := []cloudscale.Server{
+		{
+			Name: "worker-1",
+			ZonalResource: cloudscale.ZonalResource{
+				Zone: cloudscale.Zone{Slug: "rma1"},
+			},
+			Interfaces: []cloudscale.Interface{{
+				Addresses: []cloudscale.Address{{
+					Address: "10.0.0.1",
+					Subnet: cloudscale.SubnetStub{
+						UUID: "00000000-0000-0000-0000-000000000000",
+					},
+				}},
+			}},
+		},
+		{
+			Name: "worker-2",
+			ZonalResource: cloudscale.ZonalResource{
+				Zone: cloudscale.Zone{Slug: "rma1"},
+			},
+			Interfaces: []cloudscale.Interface{{
+				Addresses: []cloudscale.Address{{
+					Address: "10.0.0.2",
+					Subnet: cloudscale.SubnetStub{
+						UUID: "00000000-0000-0000-0000-000000000000",
+					},
+				}},
+			}},
+		},
+	}
+
+	s.Annotations = map[string]string{
+		LoadBalancerHealthMonitorType:     "udp-connect",
+		LoadBalancerHealthMonitorDelayS:   "3",
+		LoadBalancerHealthMonitorTimeoutS: "2",
+	}
+	s.Spec.Ports = []v1.ServicePort{
+		{
+			Protocol: "UDP",
+			Port:     53,
+			NodePort: 30053,
+			Name:     "udp",
+		},
+		{
+			Protocol: "TCP",
+			Port:     53,
+			NodePort: 30053,
+			Name:     "tcp",
+		},
+	}
+
+	desired, err := desiredLbState(i, nodes, servers)
+	assert.NoError(t, err)
+
+	// Ensure the lb exists
+	assert.Equal(t, "lb-standard", desired.lb.Flavor.Slug)
+	assert.Len(t, desired.lb.VIPAddresses, 0)
+
+	// Have one pool per service port
+	assert.Len(t, desired.pools, 2)
+	assert.Equal(t, desired.pools[0].Name, "udp/udp")
+	assert.Equal(t, desired.pools[0].Protocol, "udp")
+	assert.Equal(t, desired.pools[0].Algorithm, "round_robin")
+	assert.Equal(t, desired.pools[1].Name, "tcp/tcp")
+	assert.Equal(t, desired.pools[1].Protocol, "tcp")
+	assert.Equal(t, desired.pools[1].Algorithm, "round_robin")
+
+	// One member per server
+	for _, pool := range desired.pools {
+		members := desired.members[pool]
+		assert.Len(t, members, 2)
+
+		assert.Equal(t, "10.0.0.1", members[0].Address)
+		assert.Equal(t, "10.0.0.2", members[1].Address)
+
+		assert.True(t, members[0].ProtocolPort == 30053)
+	}
+
+	// One listener per pool
+	for _, pool := range desired.pools {
+		listeners := desired.listeners[pool]
+		assert.Len(t, listeners, 1)
+
+		assert.Equal(t, pool.Protocol, listeners[0].Protocol)
+		assert.True(t, listeners[0].ProtocolPort == 53)
+	}
+
+	// One health monitor per pool
+	for _, pool := range desired.pools {
+		monitors := desired.monitors[pool]
+		assert.Len(t, monitors, 1)
+		assert.Equal(t, "udp-connect", monitors[0].Type)
+		assert.Equal(t, 3, monitors[0].DelayS)
+		assert.Equal(t, 2, monitors[0].TimeoutS)
+	}
+}
+
 func TestActualState(t *testing.T) {
 	t.Parallel()
 
