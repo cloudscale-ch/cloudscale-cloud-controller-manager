@@ -161,8 +161,8 @@ func TestDesiredService(t *testing.T) {
 	assert.Equal(t, desired.pools[0].Protocol, "tcp")
 	assert.Equal(t, desired.pools[0].Algorithm, "round_robin")
 	assert.Equal(t, desired.pools[1].Name, "tcp/https")
-	assert.Equal(t, desired.pools[0].Protocol, "tcp")
-	assert.Equal(t, desired.pools[0].Algorithm, "round_robin")
+	assert.Equal(t, desired.pools[1].Protocol, "tcp")
+	assert.Equal(t, desired.pools[1].Algorithm, "round_robin")
 
 	// One member per server
 	for _, pool := range desired.pools {
