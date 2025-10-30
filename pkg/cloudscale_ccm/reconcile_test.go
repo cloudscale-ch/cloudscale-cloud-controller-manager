@@ -137,13 +137,13 @@ func TestDesiredService(t *testing.T) {
 		{
 			Protocol: "TCP",
 			Port:     80,
-			NodePort: 8080,
+			NodePort: 30080,
 			Name:     "http",
 		},
 		{
 			Protocol: "TCP",
 			Port:     443,
-			NodePort: 8443,
+			NodePort: 30443,
 			Name:     "https",
 		},
 	}
@@ -173,11 +173,11 @@ func TestDesiredService(t *testing.T) {
 		assert.Equal(t, "10.0.0.2", members[1].Address)
 
 		assert.True(t,
-			members[0].ProtocolPort == 8443 ||
-				members[0].ProtocolPort == 8080)
+			members[0].ProtocolPort == 30443 ||
+				members[0].ProtocolPort == 30080)
 		assert.True(t,
-			members[1].ProtocolPort == 8443 ||
-				members[1].ProtocolPort == 8080)
+			members[1].ProtocolPort == 30443 ||
+				members[1].ProtocolPort == 30080)
 	}
 
 	// One listener per pool
@@ -864,7 +864,7 @@ func TestLimitSubnets(t *testing.T) {
 		{
 			Protocol: "TCP",
 			Port:     80,
-			NodePort: 123456,
+			NodePort: 30080,
 		},
 	}
 
