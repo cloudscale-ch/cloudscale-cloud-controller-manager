@@ -507,7 +507,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEndDualProtocol() {
 					Containers: []v1.Container{
 						{
 							Name:  "coredns",
-							Image: "coredns/coredns:1.11.1",
+							Image: "docker.io/coredns/coredns:1.13.1",
 							Args:  []string{"-conf", "/etc/coredns/Corefile"},
 							Ports: []v1.ContainerPort{
 								{ContainerPort: 53, Protocol: v1.ProtocolUDP, Name: "dns-udp"},
