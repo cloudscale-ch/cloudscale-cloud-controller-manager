@@ -404,6 +404,13 @@ func (s *IntegrationTestSuite) TestServiceEndToEndUDP() {
 	s.Require().Len(service.Status.LoadBalancer.Ingress, 2)
 	addr := service.Status.LoadBalancer.Ingress[0].IP
 
+	// We have to wait a few seconds until the configured udp-connect
+	// health monitor reports the services as up. Depending on the
+	// timings, we could see i/o timeouts otherwise.
+	// Sleeping 9 seconds allows for at least 3 successful up probes,
+	// which is one more than required.
+	time.Sleep(3 * 3 * time.Second)
+
 	// Verify UDP service responses using Go's UDP client
 	s.T().Log("Verifying UDP echo service responses")
 	errors := 0
@@ -412,7 +419,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEndUDP() {
 	// Create UDP client
 	conn, err := net.Dial("udp", fmt.Sprintf("%s:5000", addr))
 	s.Require().NoError(err)
-	s.T().Log("UDP client connected successfully")
+	s.T().Log("UDP client created successfully")
 	defer conn.Close()
 
 	// Set read timeout
