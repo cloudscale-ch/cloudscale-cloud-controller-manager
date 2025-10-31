@@ -119,7 +119,7 @@ const (
 	// with protocol `TCP` use. Set it to `proxy` and `proxyv2` if TCP
 	// traffic should be forwarded using these protocols.
 	//
-	// When setting the protocol of a port to `UDP,` traffic is always forwarded
+	// When setting the protocol of a port to `UDP`, traffic is always forwarded
 	// using UDP.
 	//
 	// We are technically able to have different protocols for
