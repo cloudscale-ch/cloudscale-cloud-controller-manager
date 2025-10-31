@@ -65,6 +65,14 @@ spec:
             - containerPort: 53
               protocol: TCP
               name: dns-tcp
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8181
       volumes:
         - name: config
           configMap:
@@ -73,9 +81,6 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  annotations:
-    k8s.cloudscale.ch/loadbalancer-health-monitor-delay-s: "3"
-    k8s.cloudscale.ch/loadbalancer-health-monitor-timeout-s: "2"
   labels:
     app: dns-server
   name: dns-server
