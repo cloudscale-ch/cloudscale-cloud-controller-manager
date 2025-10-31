@@ -122,9 +122,10 @@ func desiredLbState(
 
 	for _, port := range serviceInfo.Service.Spec.Ports {
 
-		if port.Protocol != "TCP" {
+		if port.Protocol != v1.ProtocolTCP && port.Protocol != v1.ProtocolUDP {
 			return nil, fmt.Errorf(
-				"service %s: cannot use %s for %d, only TCP is supported",
+				"service %s: cannot use %s for %d"+
+					", only TCP and UDP are supported",
 				serviceInfo.Service.Name,
 				port.Protocol,
 				port.Port)
@@ -145,10 +146,15 @@ func desiredLbState(
 			}
 		}
 
+		poolProtocol := protocol
+		if port.Protocol != v1.ProtocolTCP {
+			poolProtocol = "udp"
+		}
+
 		pool := cloudscale.LoadBalancerPool{
 			Name:      poolName(port.Protocol, port.Name),
 			Algorithm: algorithm,
-			Protocol:  protocol,
+			Protocol:  poolProtocol,
 		}
 		s.pools = append(s.pools, &pool)
 
@@ -213,7 +219,7 @@ func desiredLbState(
 		s.monitors[&pool] = append(s.monitors[&pool], *monitor)
 
 		// Add a listener for each pool
-		listener, err := listenerForPort(serviceInfo, int(port.Port))
+		listener, err := listenerForPort(serviceInfo, port)
 		if err != nil {
 			return nil, err
 		}
@@ -813,7 +819,7 @@ func runActions(
 // annotations into consideration.
 func listenerForPort(
 	serviceInfo *serviceInfo,
-	port int,
+	port v1.ServicePort,
 ) (*cloudscale.LoadBalancerListener, error) {
 
 	var (
@@ -821,8 +827,13 @@ func listenerForPort(
 		err      error
 	)
 
-	listener.Protocol = serviceInfo.annotation(LoadBalancerListenerProtocol)
-	listener.ProtocolPort = port
+	listenerProtocol := serviceInfo.annotation(LoadBalancerListenerProtocol)
+	if port.Protocol != v1.ProtocolTCP {
+		listenerProtocol = "udp"
+	}
+
+	listener.Protocol = listenerProtocol
+	listener.ProtocolPort = int(port.Port)
 	listener.Name = listenerName(listener.Protocol, listener.ProtocolPort)
 
 	listener.TimeoutClientDataMS, err = serviceInfo.annotationInt(

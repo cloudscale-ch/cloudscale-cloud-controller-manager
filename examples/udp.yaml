@@ -1,0 +1,63 @@
+# Deploys a UDP echo server container and creates a loadbalancer service for it:
+#
+#     export KUBECONFIG=path/to/kubeconfig
+#     kubectl apply -f udp-echo.yml
+#
+# Wait for `kubectl describe service udp-echo` to show "Loadbalancer Ensured",
+# then use the IP address found under "LoadBalancer Ingress" to connect to the
+# service.
+#
+# You can test the UDP service with netcat:
+#
+#     echo "Tell me a joke" | nc -u -w 1 $(kubectl get service udp-echo -o jsonpath='{.status.loadBalancer.ingress[0].ip}') 5000
+#
+# To view the logs:
+#
+#     kubectl logs -l "app=udp-echo"
+#
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: udp-echo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: udp-echo
+  template:
+    metadata:
+      labels:
+        app: udp-echo
+    spec:
+      containers:
+        - name: udp-echo
+          image: docker.io/alpine/socat
+          command:
+            - socat
+            - "-v"
+            - "UDP4-RECVFROM:5353,fork"
+            - "SYSTEM:echo 'I could tell you a UDP joke, but you might not get it...',pipes"
+          ports:
+            - containerPort: 5353
+              protocol: UDP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    k8s.cloudscale.ch/loadbalancer-health-monitor-type: udp-connect
+    k8s.cloudscale.ch/loadbalancer-health-monitor-delay-s: "3"
+    k8s.cloudscale.ch/loadbalancer-health-monitor-timeout-s: "2"
+  labels:
+    app: udp-echo
+  name: udp-echo
+spec:
+  ports:
+    - port: 5000
+      protocol: UDP
+      targetPort: 5353
+      name: udp
+  selector:
+    app: udp-echo
+  type: LoadBalancer
