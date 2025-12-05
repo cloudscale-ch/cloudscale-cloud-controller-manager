@@ -28,14 +28,7 @@ import (
 )
 
 func (s *IntegrationTestSuite) CreateDeployment(
-	name string, image string, replicas int32, protocol v1.Protocol, port int32, args ...string) {
-
-	var command []string
-
-	if len(args) > 0 {
-		command = args[:1]
-		args = args[1:]
-	}
+	name string, image string, replicas int32, protocol v1.Protocol, port int32, options ...func(*appsv1.DeploymentSpec)) {
 
 	spec := appsv1.DeploymentSpec{
 		Replicas: &replicas,
@@ -53,10 +46,8 @@ func (s *IntegrationTestSuite) CreateDeployment(
 			Spec: v1.PodSpec{
 				Containers: []v1.Container{
 					{
-						Name:    name,
-						Image:   image,
-						Command: command,
-						Args:    args,
+						Name:  name,
+						Image: image,
 						Ports: []v1.ContainerPort{
 							{ContainerPort: port, Protocol: protocol},
 						},
@@ -64,6 +55,10 @@ func (s *IntegrationTestSuite) CreateDeployment(
 				},
 			},
 		},
+	}
+
+	for _, opt := range options {
+		opt(&spec)
 	}
 
 	_, err := s.k8s.AppsV1().Deployments(s.ns).Create(
@@ -100,25 +95,33 @@ type ServicePortSpec struct {
 	TargetPort int32
 }
 
-func (s *IntegrationTestSuite) ExposeDeployment(
-	name string, annotations map[string]string, ports ...ServicePortSpec) {
-
-	servicePorts := make([]v1.ServicePort, len(ports))
-	for i, p := range ports {
-		servicePorts[i] = v1.ServicePort{
-			Name:       fmt.Sprintf("port%d", i),
-			Protocol:   p.Protocol,
-			Port:       p.Port,
-			TargetPort: intstr.FromInt32(p.TargetPort),
+func WithServicePort(sp ServicePortSpec) func(spec *v1.ServiceSpec) {
+	return func(spec *v1.ServiceSpec) {
+		if spec.Ports == nil {
+			spec.Ports = make([]v1.ServicePort, 0)
 		}
+
+		spec.Ports = append(spec.Ports, v1.ServicePort{
+			Name:       fmt.Sprintf("port%d", len(spec.Ports)),
+			Protocol:   sp.Protocol,
+			Port:       sp.Port,
+			TargetPort: intstr.FromInt32(sp.TargetPort),
+		})
 	}
+}
+
+func (s *IntegrationTestSuite) ExposeDeployment(
+	name string, annotations map[string]string, options ...func(spec *v1.ServiceSpec)) {
 
 	spec := v1.ServiceSpec{
 		Type: v1.ServiceTypeLoadBalancer,
 		Selector: map[string]string{
 			"app": name,
 		},
-		Ports: servicePorts,
+	}
+
+	for _, f := range options {
+		f(&spec)
 	}
 
 	service, err := s.k8s.CoreV1().Services(s.ns).Get(
@@ -281,7 +284,7 @@ func (s *IntegrationTestSuite) AwaitServiceReady(
 		s.Require().NotNil(service)
 
 		if service.Annotations != nil {
-			uuid := service.Annotations["k8s.cloudscale.ch/loadbalancer-uuid"]
+			uuid := service.Annotations[cloudscale_ccm.LoadBalancerUUID]
 
 			// EnsureLoadBalancer sets the annotation, and then returns the
 			// load balancer status to Kubernetes. This means there is a short
@@ -308,11 +311,11 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 
 	// Deploy a TCP server that returns the hostname
 	s.T().Log("Creating nginx deployment")
-	s.CreateDeployment("nginx", "nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
+	s.CreateDeployment("nginx", "docker.io/nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
 
 	// Expose the deployment using a LoadBalancer service
 	s.ExposeDeployment("nginx", nil,
-		ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80})
+		WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for nginx service to be ready")
@@ -366,6 +369,155 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	s.Assert().NotContains(lines, "Warn")
 }
 
+// TestServiceEndToEndNodeSelector tests whether annotating a service with loadbalancer-node-selector works as intended.
+//
+// It first deploys an nginx on the first node and exposes it using a service having the annotation set to this node as well.
+// After verifying accessing the nginx works, the test adjusts the annotation to the second node and verifies accessing nginx doesn't work anymore.
+// As the last step, it sets the nodeSelector to a not existing label, making sure the LB has no pool members anymore.
+//
+// This is dependent on setting `externalTrafficPolicy: Local` on the service, since otherwise the request would just be forwarded to the other node.
+func (s *IntegrationTestSuite) TestServiceEndToEndNodeSelector() {
+	start := time.Now()
+
+	// fetch a valid node from k8s, since the prefix varies between test runs on CI
+	nodes, err := s.k8s.CoreV1().Nodes().List(s.T().Context(), metav1.ListOptions{
+		LabelSelector: "!node-role.kubernetes.io/control-plane",
+	})
+	if !s.Assert().NoError(err) || !s.Assert().NotNil(nodes) {
+		return
+	}
+	if !s.Assert().GreaterOrEqual(len(nodes.Items), 2) {
+		s.T().Log("invalid amount of nodes received", "nodes", nodes.Items)
+		return
+	}
+	firstNodeName := nodes.Items[0].Name
+	secondNodeName := nodes.Items[1].Name
+
+	s.T().Log("Creating nginx deployment")
+	s.CreateDeployment("nginx-selected", "docker.io/nginxdemos/hello:plain-text", 1, v1.ProtocolTCP, 80, func(spec *appsv1.DeploymentSpec) {
+		spec.Template.Spec.NodeSelector = map[string]string{
+			"kubernetes.io/hostname": firstNodeName,
+		}
+	})
+
+	s.T().Log("exposing service with valid node-selector")
+	s.ExposeDeployment("nginx-selected", map[string]string{cloudscale_ccm.LoadBalancerNodeSelector: fmt.Sprintf("kubernetes.io/hostname=%s", firstNodeName)},
+		WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}),
+		func(spec *v1.ServiceSpec) {
+			spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+		})
+
+	_ = s.verifyLBAvailability("nginx-selected", start, true)
+
+	// adjust LoadBalancer to second node
+	// and ensure we can't reach nginx anymore since it's on another node and externalTrafficPolicy is Local.
+	s.T().Log("exposing service with valid node-selector but targeting a node without pod")
+	s.ExposeDeployment("nginx-selected", map[string]string{cloudscale_ccm.LoadBalancerNodeSelector: fmt.Sprintf("kubernetes.io/hostname=%s", secondNodeName)},
+		WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}),
+		func(spec *v1.ServiceSpec) {
+			spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+		})
+
+	service := s.verifyLBAvailability("nginx-selected", start, false)
+	if service == nil {
+		return
+	}
+
+	// verify only one pool member exists, abort test if there was an error checking this.
+	if s.Assert().NoError(s.assertLBPoolMembersLen(service, 1)) {
+		return
+	}
+
+	// adjust LoadBalancer to a selector where no nodes are existing
+	s.T().Log("exposing service with node-selector targeting no nodes")
+	s.ExposeDeployment("nginx-selected", map[string]string{cloudscale_ccm.LoadBalancerNodeSelector: "kubernetes.io/hostname=notexisting"},
+		WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}),
+		func(spec *v1.ServiceSpec) {
+			spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+		})
+
+	service = s.verifyLBAvailability("nginx-selected", start, false)
+	if service == nil {
+		return
+	}
+
+	// verify only one pool member exists, abort test if there was an error checking this.
+	if s.Assert().NoError(s.assertLBPoolMembersLen(service, 0)) {
+		return
+	}
+}
+
+// verifyLBAvailability verifies that the service of type LoadBalancer is available.
+// It checks annotations and reachability, as well as verifying there are no error/warning logs in CCM.
+//
+// N.B. the returned service may be nil!
+func (s *IntegrationTestSuite) verifyLBAvailability(name string, start time.Time, reachable bool) *v1.Service {
+	s.T().Helper()
+
+	// Wait for the service to be ready
+	s.T().Log("Waiting for nginx service to be ready")
+	service := s.AwaitServiceReady(name, 180*time.Second)
+	if !s.Assert().NotNil(service) {
+		return nil
+	}
+
+	// Ensure the annotations are set
+	s.Assert().NotEmpty(
+		service.Annotations[cloudscale_ccm.LoadBalancerUUID])
+	s.Assert().NotEmpty(
+		service.Annotations[cloudscale_ccm.LoadBalancerConfigVersion])
+	s.Assert().NotEmpty(
+		service.Annotations[cloudscale_ccm.LoadBalancerZone])
+
+	// Ensure we have two public IP addresses
+	s.Require().Len(service.Status.LoadBalancer.Ingress, 2)
+	addr := service.Status.LoadBalancer.Ingress[0].IP
+
+	response, err := testkit.HelloNginx(addr, 80)
+	if reachable {
+		s.Assert().NoError(err, "request failed")
+		if s.Assert().NotNil(response, "response is empty") {
+			s.Assert().NotEmpty(response.ServerName)
+		}
+	} else {
+		s.Assert().Error(err, "request successful")
+		s.Assert().Nil(response, "response is empty")
+	}
+
+	// In this simple case we expect no errors nor warnings
+	s.T().Log("Checking log output for errors/warnings")
+	lines := s.CCMLogs(start)
+
+	s.Assert().NotContains(lines, "error")
+	s.Assert().NotContains(lines, "Error")
+	s.Assert().NotContains(lines, "warn")
+	s.Assert().NotContains(lines, "Warn")
+	return service
+}
+
+// assertLBPoolMembersLen fetches the loadbalancer pool members and asserts the size is equal given len.
+func (s *IntegrationTestSuite) assertLBPoolMembersLen(service *v1.Service, len int) error {
+	pools, err := s.api.LoadBalancerPools.List(s.T().Context())
+	if err != nil {
+		return fmt.Errorf("unable to list loadbalancer pools: %w", err)
+	}
+
+	var pool cloudscale.LoadBalancerPool
+	for _, p := range pools {
+		if p.LoadBalancer.UUID == service.Annotations[cloudscale_ccm.LoadBalancerUUID] {
+			pool = p
+			break
+		}
+	}
+	members, err := s.api.LoadBalancerPoolMembers.List(s.T().Context(), pool.UUID)
+	if err != nil {
+		return fmt.Errorf("unable to list pool members: %w", err)
+	}
+
+	s.Assert().Len(members, len)
+	return nil
+}
+
 func (s *IntegrationTestSuite) TestServiceEndToEndUDP() {
 
 	// Note the start for the log
@@ -373,19 +525,17 @@ func (s *IntegrationTestSuite) TestServiceEndToEndUDP() {
 
 	// Deploy a UDP echo server
 	s.T().Log("Creating udp-echo deployment")
-	s.CreateDeployment("udp-echo", "docker.io/alpine/socat", 2, v1.ProtocolUDP, 5353,
-		"socat",
-		"-v",
-		"UDP4-RECVFROM:5353,fork",
-		"SYSTEM:echo 'I could tell you a UDP joke, but you might not get it...',pipes",
-	)
+	s.CreateDeployment("udp-echo", "docker.io/alpine/socat", 2, v1.ProtocolUDP, 5353, func(spec *appsv1.DeploymentSpec) {
+		spec.Template.Spec.Containers[0].Command = []string{"socat"}
+		spec.Template.Spec.Containers[0].Args = []string{"-v", "UDP4-RECVFROM:5353,fork", "SYSTEM:echo 'I could tell you a UDP joke, but you might not get it...',pipes"}
+	})
 
 	// Expose the deployment using a LoadBalancer service with UDP annotations
 	s.ExposeDeployment("udp-echo", map[string]string{
 		"k8s.cloudscale.ch/loadbalancer-health-monitor-type":      "udp-connect",
 		"k8s.cloudscale.ch/loadbalancer-health-monitor-delay-s":   "3",
 		"k8s.cloudscale.ch/loadbalancer-health-monitor-timeout-s": "2",
-	}, ServicePortSpec{Protocol: v1.ProtocolUDP, Port: 5000, TargetPort: 5353})
+	}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolUDP, Port: 5000, TargetPort: 5353}))
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for udp-echo service to be ready")
@@ -546,8 +696,8 @@ func (s *IntegrationTestSuite) TestServiceEndToEndDualProtocol() {
 	s.Require().NoError(err)
 
 	s.ExposeDeployment("dns-server", nil,
-		ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 53, TargetPort: 53},
-		ServicePortSpec{Protocol: v1.ProtocolUDP, Port: 53, TargetPort: 53},
+		WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 53, TargetPort: 53}),
+		WithServicePort(ServicePortSpec{Protocol: v1.ProtocolUDP, Port: 53, TargetPort: 53}),
 	)
 
 	// Wait for the service to be ready
@@ -661,13 +811,13 @@ func (s *IntegrationTestSuite) TestServiceVIPAddresses() {
 
 	// Deploy a TCP server that returns something
 	s.T().Log("Creating foo deployment")
-	s.CreateDeployment("nginx", "nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
+	s.CreateDeployment("nginx", "docker.io/nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
 
 	// Expose the deployment using a LoadBalancer service
 	s.ExposeDeployment("nginx", map[string]string{
 		"k8s.cloudscale.ch/loadbalancer-vip-addresses": fmt.Sprintf(
 			`[{"subnet": "%s"}]`, subnet),
-	}, ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80})
+	}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 	s.T().Log("Waiting for nginx service to be ready")
 	service := s.AwaitServiceReady("nginx", 180*time.Second)
@@ -763,7 +913,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	}
 
 	// Expose the deployment using a LoadBalancer service
-	s.ExposeDeployment("peeraddr", nil, ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 3000})
+	s.ExposeDeployment("peeraddr", nil, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 3000}))
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for peeraddr service to be ready")
@@ -827,13 +977,13 @@ func (s *IntegrationTestSuite) RunTestServiceWithFloatingIP(
 
 	// Deploy a TCP server that returns the hostname
 	s.T().Log("Creating nginx deployment")
-	s.CreateDeployment("nginx", "nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
+	s.CreateDeployment("nginx", "docker.io/nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
 
 	// Expose the deployment using a LoadBalancer service with Floating IP
 	s.ExposeDeployment("nginx", map[string]string{
 		"k8s.cloudscale.ch/loadbalancer-floating-ips": fmt.Sprintf(
 			`["%s"]`, fip.Network),
-	}, ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80})
+	}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for nginx service to be ready")
@@ -889,13 +1039,13 @@ func (s *IntegrationTestSuite) TestFloatingIPConflicts() {
 
 	// Deploy a TCP server that returns the hostname
 	s.T().Log("Creating nginx deployment")
-	s.CreateDeployment("nginx", "nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
+	s.CreateDeployment("nginx", "docker.io/nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
 
 	// Expose the deployment using a LoadBalancer service with Floating IP
 	s.ExposeDeployment("nginx", map[string]string{
 		"k8s.cloudscale.ch/loadbalancer-floating-ips": fmt.Sprintf(
 			`["%s"]`, regional.Network),
-	}, ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80})
+	}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for nginx service to be ready")
@@ -908,7 +1058,7 @@ func (s *IntegrationTestSuite) TestFloatingIPConflicts() {
 	s.ExposeDeployment("service-2", map[string]string{
 		"k8s.cloudscale.ch/loadbalancer-floating-ips": fmt.Sprintf(
 			`["%s"]`, regional.Network),
-	}, ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80})
+	}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 	// Wait for a moment before checking the log
 	time.Sleep(5 * time.Second)
@@ -929,13 +1079,19 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 
 	// Deploy our http-echo server to check for proxy connections
 	s.T().Log("Creating http-echo deployment", "branch", branch)
-	s.CreateDeployment("http-echo", "golang", 2, v1.ProtocolTCP, 80, "bash", "-c", fmt.Sprintf(`
-  		git clone https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager ccm;
-	  	cd ccm;
-  		git checkout %s || exit 1;
-  		cd cmd/http-echo;
-  		go run main.go -host 0.0.0.0 -port 80
-	`, branch))
+	s.CreateDeployment("http-echo", "docker.io/golang", 2, v1.ProtocolTCP, 80, func(spec *appsv1.DeploymentSpec) {
+		spec.Template.Spec.Containers[0].Command = []string{"bash"}
+		spec.Template.Spec.Containers[0].Args = []string{
+			"-c",
+			fmt.Sprintf(`
+			git clone https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager ccm;
+			cd ccm;
+			git checkout %s || exit 1;
+			cd cmd/http-echo;
+			go run main.go -host 0.0.0.0 -port 80
+			`, branch),
+		}
+	})
 
 	// Expose the deployment using a LoadBalancer service
 	s.ExposeDeployment("http-echo", map[string]string{
@@ -944,7 +1100,7 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 		// Make sure to get the default behavior of older Kubernetes releases,
 		// even on newer releases.
 		"k8s.cloudscale.ch/loadbalancer-ip-mode": "VIP",
-	}, ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80})
+	}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 	// Wait for the service to be ready
 	s.T().Log("Waiting for http-echo service to be ready")
@@ -992,7 +1148,7 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 			"%s.cust.cloudscale.ch",
 			strings.ReplaceAll(addr, ".", "-"),
 		),
-	}, ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80})
+	}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 	s.T().Log("Testing PROXY protocol from inside with workaround")
 	used = s.RunJob("curlimages/curl", 90*time.Second, "curl", "-s", url)
@@ -1005,7 +1161,7 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 	if newer {
 		s.ExposeDeployment("http-echo", map[string]string{
 			"k8s.cloudscale.ch/loadbalancer-pool-protocol": "proxy",
-		}, ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80})
+		}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 		s.T().Log("Testing PROXY protocol on newer Kubernetes releases")
 		used = s.RunJob("curlimages/curl", 90*time.Second, "curl", "-s", url)

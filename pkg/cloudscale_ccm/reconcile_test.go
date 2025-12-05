@@ -1156,10 +1156,10 @@ func TestLimitSubnets(t *testing.T) {
 	assert.Equal(t, "10.0.1.1", state.members[state.pools[0]][0].Address)
 	assert.Equal(t, "10.0.1.2", state.members[state.pools[0]][1].Address)
 
-	// If we have no valid addresses, we get an error
+	// If we have no valid addresses, we get no error
 	s.Annotations[LoadBalancerListenerAllowedSubnets] = `
 		["00000000-0000-0000-0000-000000000003"]`
 
 	_, err = desiredLbState(i, nodes, servers)
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }
