@@ -19,9 +19,8 @@ type HelloResponse struct {
 }
 
 func HelloNginx(addr string, port uint16) (*HelloResponse, error) {
-	body, err := HTTPRead(
-		"http://" + net.JoinHostPort(addr, strconv.FormatUint(
-			uint64(port), 10)))
+	body, err := HTTPRead("http://" + net.JoinHostPort(addr, strconv.FormatUint(
+		uint64(port), 10)))
 	if err != nil {
 		return nil, err
 	}

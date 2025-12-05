@@ -22,16 +22,13 @@ type lbState struct {
 
 	// Pool pointers are used to refer to members by pool, therefore use a
 	// pointer here as well, to not accidentally copy the struct.
-	pools   []*cloudscale.LoadBalancerPool
-	members map[*cloudscale.LoadBalancerPool][]cloudscale.
-		LoadBalancerPoolMember
-	monitors map[*cloudscale.LoadBalancerPool][]cloudscale.
-			LoadBalancerHealthMonitor
+	pools    []*cloudscale.LoadBalancerPool
+	members  map[*cloudscale.LoadBalancerPool][]cloudscale.LoadBalancerPoolMember
+	monitors map[*cloudscale.LoadBalancerPool][]cloudscale.LoadBalancerHealthMonitor
 
 	// Though not currently used that way, listeners are not
 	// necessarily bound to any given pool.
-	listeners map[*cloudscale.LoadBalancerPool][]cloudscale.
-			LoadBalancerListener
+	listeners map[*cloudscale.LoadBalancerPool][]cloudscale.LoadBalancerListener
 
 	// The assigned floating IPs
 	floatingIPs []string
@@ -199,15 +196,6 @@ func desiredLbState(
 					)
 				}
 			}
-		}
-
-		// If there are no pool members, return an error. It would be possible
-		// to just put a load balancer up that has no function, but it seems
-		// more useful to err instead, as there's likely something wrong.
-		if len(s.members[&pool]) == 0 {
-			return nil, fmt.Errorf(
-				"service %s: no private address found on any node",
-				serviceInfo.Service.Name)
 		}
 
 		// Add a health monitor for each pool
