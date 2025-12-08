@@ -40,7 +40,7 @@ spec:
     spec:
       containers:
       - name: proxy-hello
-        image: nginxdemos/hello:plain-text
+        image: docker.io/nginxdemos/hello:plain-text
         volumeMounts:
           - name: nginx-config-volume
             mountPath: /etc/nginx/nginx.conf
