@@ -1,0 +1,132 @@
+# Deploys two docker.io/nginxdemos/hello:plain-text containers ("blue" and "red")
+# and creates ClusterIP services named "blue-svc" and "red-svc" for the
+# deployments.
+# Additionally:
+#   - a Gateway resource named "my-gateway" using Cilium Gateway-API is set up
+#   - a HTTPRoute named "simple" using "my-gateway" is used to route requests for "/red" to "red-svc" service and
+#     requests for "/blue" to the "blue-svc" service.
+#
+# This examples needs cilium with Gateway-API support to be installed, see:
+#     https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/#gs-gateway-api
+#     https://gateway-api.sigs.k8s.io/guides/
+#
+# Setup using k8test (https://github.com/cloudscale-ch/k8test):
+#     $ export KUBECONFIG=k8test/cluster/admin.conf
+#     $ kubectl apply --server-side -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/experimental-install.yaml
+#     $ cilium upgrade --set kubeProxyReplacement=true --set gatewayAPI.enabled=true
+#     $ kubectl apply -f examples/gateway-api.yaml
+#
+# Wait for `kubectl get gateway my-gateway` to
+# show "PROGRAMMED: True", then use the IP address found under "ADDRESS" to connect to the service.
+#
+# You can also use the following shortcut:
+#
+#     curl http://$(kubectl get gateway my-gateway -o jsonpath='{.status.addresses[0].value}')/blue
+#     curl http://$(kubectl get gateway my-gateway -o jsonpath='{.status.addresses[0].value}')/red
+#
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: blue
+  name: blue
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blue
+  template:
+    metadata:
+      labels:
+        app: blue
+    spec:
+      containers:
+        - image: docker.io/nginxdemos/hello:plain-text
+          name: hello
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: blue
+  name: blue-svc
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: blue
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: red
+  name: red
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: red
+  template:
+    metadata:
+      labels:
+        app: red
+    spec:
+      containers:
+        - image: docker.io/nginxdemos/hello:plain-text
+          name: hello
+          resources: { }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: red
+  name: red-svc
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: red
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: my-gateway
+spec:
+  gatewayClassName: cilium
+  listeners:
+    - protocol: HTTP
+      port: 80
+      name: web-gw
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: simple
+spec:
+  parentRefs:
+    - name: my-gateway
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /red
+      backendRefs:
+        - name: red-svc
+          port: 80
+    - matches:
+        - path:
+            type: Exact
+            value: /blue
+      backendRefs:
+        - name: blue-svc
+          port: 80
