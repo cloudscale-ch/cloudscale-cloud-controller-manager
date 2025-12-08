@@ -51,7 +51,7 @@ spec:
     spec:
       containers:
         - name: coredns
-          image: coredns/coredns:1.11.1
+          image: docker.io/coredns/coredns:1.11.1
           args:
             - -conf
             - /etc/coredns/Corefile

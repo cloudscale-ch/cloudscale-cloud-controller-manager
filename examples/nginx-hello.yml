@@ -1,4 +1,4 @@
-# Deploys the nginxdemos/hello:plain-text container and creates a
+# Deploys the docker.io/nginxdemos/hello:plain-text container and creates a
 # loadbalancer service for it:
 #
 #     export KUBECONFIG=path/to/kubeconfig
@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
       - name: hello
-        image: nginxdemos/hello:plain-text
+        image: docker.io/nginxdemos/hello:plain-text
 ---
 apiVersion: v1
 kind: Service

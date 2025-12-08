@@ -1,4 +1,4 @@
-# Deploys two nginxdemos/hello:plain-text containers ("blue" and "red")
+# Deploys two docker.io/nginxdemos/hello:plain-text containers ("blue" and "red")
 # and creates ClusterIP services named "blue-svc" and "red-svc" for the
 # deployments. Additionally, an Ingress resource named "simple" is set
 # up to route requests for "/red" to "red-svc" service and
@@ -37,7 +37,7 @@ spec:
         app: blue
     spec:
       containers:
-        - image: nginxdemos/hello:plain-text
+        - image: docker.io/nginxdemos/hello:plain-text
           name: hello
 ---
 apiVersion: v1
@@ -71,7 +71,7 @@ spec:
         app: red
     spec:
       containers:
-        - image: nginxdemos/hello:plain-text
+        - image: docker.io/nginxdemos/hello:plain-text
           name: hello
           resources: { }
 ---
