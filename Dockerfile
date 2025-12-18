@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS build
+FROM golang:1.25-alpine AS build
 ARG VERSION
 
 RUN apk add --no-cache git
@@ -15,4 +15,4 @@ FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 
 COPY --from=build /host/bin/cloudscale-cloud-controller-manager /usr/local/bin/cloudscale-cloud-controller-manager
-ENTRYPOINT ["cloudscale-cloud-controller-manager"] 
+ENTRYPOINT ["cloudscale-cloud-controller-manager"]
