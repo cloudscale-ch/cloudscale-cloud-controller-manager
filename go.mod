@@ -1,6 +1,6 @@
 module github.com/cloudscale-ch/cloudscale-cloud-controller-manager
 
-go 1.24
+go 1.25
 
 // https://github.com/kubernetes/apiserver/issues/97
 replace github.com/google/cel-go => github.com/google/cel-go v0.17.7
