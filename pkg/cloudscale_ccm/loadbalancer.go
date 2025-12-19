@@ -2,7 +2,6 @@ package cloudscale_ccm
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,7 +10,9 @@ import (
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 )
@@ -208,7 +209,7 @@ const (
 	// connections timing out while the monitor is updated.
 	LoadBalancerHealthMonitorTimeoutS = "k8s.cloudscale.ch/loadbalancer-health-monitor-timeout-s"
 
-	// LoadBalancerHealthMonitorDownThreshold is the number of the checks that
+	// LoadBalancerHealthMonitorUpThreshold is the number of the checks that
 	// need to succeed before a pool member is considered up. Defaults to 2.
 	LoadBalancerHealthMonitorUpThreshold = "k8s.cloudscale.ch/loadbalancer-health-monitor-up-threshold"
 
@@ -278,7 +279,7 @@ const (
 	// Changing this annotation on an established service is considered safe.
 	LoadBalancerListenerTimeoutMemberDataMS = "k8s.cloudscale.ch/loadbalancer-timeout-member-data-ms"
 
-	// LoadBalancerSubnetLimit is a JSON list of subnet UUIDs that the
+	// LoadBalancerListenerAllowedSubnets is a JSON list of subnet UUIDs that the
 	// loadbalancer should use. By default, all subnets of a node are used:
 	//
 	// * `[]` means that anyone is allowed to connect (default).
@@ -291,12 +292,17 @@ const (
 	// This is an advanced feature, useful if you have nodes that are in
 	// multiple private subnets.
 	LoadBalancerListenerAllowedSubnets = "k8s.cloudscale.ch/loadbalancer-listener-allowed-subnets"
+
+	// LoadBalancerNodeSelector can be set to restrict which nodes are added to the LB pool.
+	// It accepts a standard Kubernetes label selector string.
+	LoadBalancerNodeSelector = "k8s.cloudscale.ch/loadbalancer-node-selector"
 )
 
 type loadbalancer struct {
-	lbs lbMapper
-	srv serverMapper
-	k8s kubernetes.Interface
+	lbs      lbMapper
+	srv      serverMapper
+	k8s      kubernetes.Interface
+	recorder record.EventRecorder
 }
 
 // GetLoadBalancer returns whether the specified load balancer exists, and
@@ -387,16 +393,23 @@ func (l *loadbalancer) EnsureLoadBalancer(
 		return nil, err
 	}
 
-	// Refuse to do anything if there are no nodes
+	nodes, err := filterNodesBySelector(serviceInfo, nodes)
+	if err != nil {
+		return nil, err
+	}
+
 	if len(nodes) == 0 {
-		return nil, errors.New(
-			"no valid nodes for service found, please verify there is " +
-				"at least one that allows load balancers",
+		l.recorder.Event(
+			service,
+			v1.EventTypeWarning,
+			"NoValidNodes",
+			"No valid nodes for service found, "+
+				"double-check node-selector annotation",
 		)
 	}
 
 	// Reconcile
-	err := reconcileLbState(ctx, l.lbs.client, func() (*lbState, error) {
+	err = reconcileLbState(ctx, l.lbs.client, func() (*lbState, error) {
 		// Get the desired state from Kubernetes
 		servers, err := l.srv.mapNodes(ctx, nodes).All()
 		if err != nil {
@@ -442,6 +455,28 @@ func (l *loadbalancer) EnsureLoadBalancer(
 	return result, nil
 }
 
+func filterNodesBySelector(
+	serviceInfo *serviceInfo,
+	nodes []*v1.Node,
+) ([]*v1.Node, error) {
+	selector := labels.Everything()
+	if v := serviceInfo.annotation(LoadBalancerNodeSelector); v != "" {
+		var err error
+		selector, err = labels.Parse(v)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse selector: %w", err)
+		}
+	}
+	selectedNodes := make([]*v1.Node, 0, len(nodes))
+	for _, node := range nodes {
+		if selector.Matches(labels.Set(node.Labels)) {
+			selectedNodes = append(selectedNodes, node)
+		}
+	}
+
+	return selectedNodes, nil
+}
+
 // UpdateLoadBalancer updates hosts under the specified load balancer.
 // Implementations must treat the *v1.Service and *v1.Node
 // parameters as read-only and not modify them.
@@ -459,6 +494,21 @@ func (l *loadbalancer) UpdateLoadBalancer(
 	serviceInfo := newServiceInfo(service, clusterName)
 	if err := l.ensureValidConfig(ctx, serviceInfo); err != nil {
 		return err
+	}
+
+	nodes, err := filterNodesBySelector(serviceInfo, nodes)
+	if err != nil {
+		return err
+	}
+
+	if len(nodes) == 0 {
+		l.recorder.Event(
+			service,
+			v1.EventTypeWarning,
+			"NoValidNodes",
+			"No valid nodes for service found, "+
+				"double-check node-selector annotation",
+		)
 	}
 
 	// Reconcile

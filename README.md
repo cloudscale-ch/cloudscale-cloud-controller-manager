@@ -429,6 +429,7 @@ Changes to the following annotations causes pools to be recreated and cause an e
 - `k8s.cloudscale.ch/loadbalancer-pool-algorithm`
 - `k8s.cloudscale.ch/loadbalancer-pool-protocol`
 - `k8s.cloudscale.ch/loadbalancer-listener-allowed-subnets`
+- `k8s.cloudscale.ch/loadbalancer-node-selector`
 
 Additionally, changes to `spec.externalTrafficPolicy` have the same effect.
 
