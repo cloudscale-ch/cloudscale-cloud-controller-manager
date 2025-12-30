@@ -9,9 +9,12 @@ import (
 	"strings"
 	"time"
 
-	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	"golang.org/x/oauth2"
-	"k8s.io/client-go/kubernetes"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
 
 	cloudprovider "k8s.io/cloud-provider"
@@ -32,6 +35,8 @@ const (
 type cloud struct {
 	instances    *instances
 	loadbalancer *loadbalancer
+
+	eventRecorder record.EventRecorder
 }
 
 // Register this provider with Kubernetes.
@@ -112,8 +117,27 @@ func (c *cloud) Initialize(
 
 	// This cannot be configured earlier, even though it seems better situated
 	// in newCloudscaleClient
-	c.loadbalancer.k8s = kubernetes.NewForConfigOrDie(
-		clientBuilder.ConfigOrDie("cloudscale-cloud-controller-manager"))
+	c.loadbalancer.k8s = clientBuilder.ClientOrDie(
+		"cloudscale-cloud-controller-manager",
+	)
+
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&v1.EventSinkImpl{
+		Interface: c.loadbalancer.k8s.CoreV1().Events(""),
+	})
+	c.eventRecorder = eventBroadcaster.NewRecorder(scheme.Scheme,
+		corev1.EventSource{
+			Component: "cloudscale-cloud-controller-manager",
+		},
+	)
+
+	go func() {
+		// wait until stop chan closes
+		<-stop
+		eventBroadcaster.Shutdown()
+	}()
+
+	c.loadbalancer.recorder = c.eventRecorder
 }
 
 // LoadBalancer returns a balancer interface. Also returns true if the

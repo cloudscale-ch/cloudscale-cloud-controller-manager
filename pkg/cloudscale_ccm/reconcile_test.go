@@ -4,11 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/actions"
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/actions"
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
 )
 
 func TestPoolName(t *testing.T) {
@@ -1156,10 +1157,10 @@ func TestLimitSubnets(t *testing.T) {
 	assert.Equal(t, "10.0.1.1", state.members[state.pools[0]][0].Address)
 	assert.Equal(t, "10.0.1.2", state.members[state.pools[0]][1].Address)
 
-	// If we have no valid addresses, we get an error
+	// If we have no valid addresses, we get no error
 	s.Annotations[LoadBalancerListenerAllowedSubnets] = `
 		["00000000-0000-0000-0000-000000000003"]`
 
 	_, err = desiredLbState(i, nodes, servers)
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }

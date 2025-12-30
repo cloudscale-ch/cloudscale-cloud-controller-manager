@@ -1,0 +1,56 @@
+# Deploys the docker.io/nginxdemos/hello:plain-text container and creates a
+# loadbalancer service with a node-selector annotation for it:
+#
+#     export KUBECONFIG=path/to/kubeconfig
+#     kubectl apply -f nginx-hello-nodeselector.yml
+#
+# Wait for `kubectl describe service hello` to show "Loadbalancer Ensured",
+# then use the IP address found under "LoadBalancer Ingress" to connect to the
+# service.
+#
+# You can also use the following shortcut:
+#
+#     curl http://$(kubectl get service hello -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+#
+# If you adjust the nodeSelector of the deployment, or the `loadbalancer-node-selector` annotation on the service,
+# you'll notice that if they don't match, the request will fail.
+#
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hello
+  template:
+    metadata:
+      labels:
+        app: hello
+    spec:
+      containers:
+      - name: hello
+        image: docker.io/nginxdemos/hello:plain-text
+      nodeSelector:
+        kubernetes.io/hostname: k8test-worker-2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: hello
+  annotations:
+    k8s.cloudscale.ch/loadbalancer-node-selector: "kubernetes.io/hostname=k8test-worker-2"
+  name: hello
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+    name: http
+  selector:
+    app: hello
+  type: LoadBalancer
+  externalTrafficPolicy: Local

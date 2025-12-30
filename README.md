@@ -287,6 +287,17 @@ Changes to following annotations may lead to new connections timing out until th
 - `k8s.cloudscale.ch/loadbalancer-health-monitor-type`
 - `k8s.cloudscale.ch/loadbalancer-health-monitor-http`
 
+Changes to the `k8s.cloudscale.ch/loadbalancer-node-selector` annotation are generally safe,
+as long as the selector matches valid node labels.
+When using `externalTrafficPolicy: Local`, ensure the selector targets nodes that are
+actually running the backend pods. Otherwise, traffic will be dropped.
+
+Unlike the well-known node label [`node.kubernetes.io/exclude-from-external-load-balancers=true`](https://kubernetes.io/docs/reference/labels-annotations-taints/#node-kubernetes-io-exclude-from-external-load-balancers),
+which globally excludes nodes from *all* LoadBalancer services, this annotation allows
+targeting a specific subset of nodes on a per-service basis.
+Note that the `exclude-from-external-load-balancers` label is applied first: nodes with
+this label are excluded before the `loadbalancer-node-selector` is evaluated.
+
 ##### Listener Port Changes
 
 Changes to the outward bound service port have a downtime ranging from 15s to 120s, depending on the action. Since the name of the port is used to avoid expensive pool recreation, the impact is minimal if the port name does not change.

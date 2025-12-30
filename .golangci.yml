@@ -29,10 +29,6 @@ linters:
     - usestdlibvars
     - whitespace
     - wsl
-  settings:
-    lll:
-      line-length: 80
-      tab-width: 4
   exclusions:
     generated: lax
     presets:
