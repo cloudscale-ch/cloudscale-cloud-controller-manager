@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/oauth2"
 	v1 "k8s.io/api/core/v1"
@@ -22,11 +22,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-func TestMain(m *testing.M) {
-	exitStatus := m.Run()
-	os.Exit(exitStatus)
-}
 
 func TestIntegration(t *testing.T) {
 	suite.Run(t, new(IntegrationTestSuite))
