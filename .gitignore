@@ -3,3 +3,4 @@ cover.out
 k8test
 bin/
 image.tar
+venv/
