@@ -470,16 +470,35 @@ func (s *IntegrationTestSuite) verifyLBAvailability(name string, start time.Time
 	s.Require().Len(service.Status.LoadBalancer.Ingress, 2)
 	addr := service.Status.LoadBalancer.Ingress[0].IP
 
-	response, err := testkit.HelloNginx(addr, 80)
-	if reachable {
-		s.Assert().NoError(err, "request failed")
-		if s.Assert().NotNil(response, "response is empty") {
-			s.Assert().NotEmpty(response.ServerName)
+	pollInterval := 500 * time.Millisecond
+	pollTimeout := 10 * time.Second
+
+	err := wait.PollUntilContextTimeout(s.T().Context(), pollInterval, pollTimeout, true, func(ctx context.Context) (bool, error) {
+		response, err := testkit.HelloNginx(addr, 80)
+
+		if reachable {
+			if err != nil {
+				s.T().Logf("waiting for connectivity: %s", err)
+				return false, nil
+			}
+			if response == nil || response.ServerName == "" {
+				s.T().Log("waiting for valid response body", "response", response)
+				return false, nil
+			}
+			return true, nil
 		}
-	} else {
-		s.Assert().Error(err, "request successful")
-		s.Assert().Nil(response, "response is empty")
-	}
+
+		if err == nil {
+			s.T().Log("waiting for service to be unreachable, but got no error")
+			return false, nil
+		}
+		if response != nil {
+			s.T().Log("waiting for service to be unreachable, but got a response")
+			return false, nil
+		}
+		return true, nil
+	})
+	s.Assert().NoError(err, "polling failed")
 
 	// we expect no warnings. Errors can happen for a short time when setting to 0 nodes reachable.
 	s.T().Log("Checking log output for errors/warnings")
