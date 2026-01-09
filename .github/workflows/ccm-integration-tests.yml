@@ -122,6 +122,14 @@ jobs:
   integration:
     name: "Kubernetes ${{ matrix.kubernetes }}"
     runs-on: ubuntu-latest
+    # Skip integration tests if the API token is missing (e.g., Dependabot or forks).
+    # Additionally, only run for PRs whose head repo matches this repository to
+    # avoid executing untrusted forked PR code with secrets.
+    # Admins can manually trigger this job for a specific branch via the 'Actions' tab
+    # using 'workflow_dispatch' after reviewing the code changes.
+    if: |
+      secrets.CLOUDSCALE_API_TOKEN != '' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
 
     needs:
       - lint
