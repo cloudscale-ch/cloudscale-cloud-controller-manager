@@ -4,6 +4,14 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    # Group all GitHub Action updates into a single PR, ignoring minor/patch
+    # this seems to be the most pragmatic approach for this repo, given that
+    # we only have a single workflow so far.
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-minor", "version-update:semver-patch"]
