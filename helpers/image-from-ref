@@ -25,8 +25,8 @@ def main(ref: str) -> int:
         return 1
 
     match ref.split('/'):
-        case ["refs", "heads", branch]:
-            tag = f"branch-{branch}"
+        case ["refs", "heads", *branch_parts]:
+            tag = f"branch-{'-'.join(branch_parts)}"
         case ["refs", "pull", pull_request, "merge"]:
             tag = f"pull-request-{pull_request}"
         case ["refs", "tags", tag_name]:
