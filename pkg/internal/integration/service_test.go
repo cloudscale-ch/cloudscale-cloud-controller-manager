@@ -74,6 +74,33 @@ func (s *IntegrationTestSuite) CreateDeployment(
 	s.Require().NoError(err)
 }
 
+// AwaitDeploymentReady waits for all deployment replicas to be ready.
+func (s *IntegrationTestSuite) AwaitDeploymentReady(name string, timeout time.Duration) {
+	s.T().Log("Waiting for deployment", name, "to be ready")
+
+	err := wait.PollUntilContextTimeout(
+		context.Background(),
+		1*time.Second,
+		timeout,
+		true,
+		func(ctx context.Context) (bool, error) {
+			deployment, err := s.k8s.AppsV1().Deployments(s.ns).Get(
+				ctx, name, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+
+			ready := deployment.Status.ReadyReplicas
+			expected := *deployment.Spec.Replicas
+
+			s.T().Logf("Deployment %s: %d/%d replicas ready", name, ready, expected)
+			return ready == expected, nil
+		},
+	)
+
+	s.Require().NoError(err, "deployment %s did not become ready within %v", name, timeout)
+}
+
 func (s *IntegrationTestSuite) CreateConfigMap(name string, data map[string]string) {
 	_, err := s.k8s.CoreV1().ConfigMaps(s.ns).Create(
 		context.Background(),
@@ -1084,28 +1111,19 @@ func (s *IntegrationTestSuite) TestFloatingIPConflicts() {
 
 func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 
-	// Get the branch to run http-echo with (in the future, we might
-	// offer this in a separate container).
-	branch := os.Getenv("HTTP_ECHO_BRANCH")
-	if len(branch) == 0 {
-		branch = "main"
+	// Deploy our http-echo server to check for proxy connections
+	httpEchoImage := os.Getenv("HTTP_ECHO_IMAGE")
+	if httpEchoImage == "" {
+		httpEchoImage = "ghcr.io/cloudscale-ch/cloudscale-cloud-controller-manager/http-echo:latest"
 	}
 
-	// Deploy our http-echo server to check for proxy connections
-	s.T().Log("Creating http-echo deployment", "branch", branch)
-	s.CreateDeployment("http-echo", "docker.io/golang", 2, v1.ProtocolTCP, 80, func(spec *appsv1.DeploymentSpec) {
-		spec.Template.Spec.Containers[0].Command = []string{"bash"}
-		spec.Template.Spec.Containers[0].Args = []string{
-			"-c",
-			fmt.Sprintf(`
-			git clone https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager ccm;
-			cd ccm;
-			git checkout %s || exit 1;
-			cd cmd/http-echo;
-			go run main.go -host 0.0.0.0 -port 80
-			`, branch),
-		}
+	s.T().Log("Creating http-echo deployment", "image", httpEchoImage)
+	s.CreateDeployment("http-echo", httpEchoImage, 2, v1.ProtocolTCP, 80, func(spec *appsv1.DeploymentSpec) {
+		spec.Template.Spec.Containers[0].Args = []string{"-host", "0.0.0.0", "-port", "80"}
 	})
+
+	// Wait for all replicas to be ready
+	s.AwaitDeploymentReady("http-echo", 120*time.Second)
 
 	// Expose the deployment using a LoadBalancer service
 	s.ExposeDeployment("http-echo", map[string]string{
