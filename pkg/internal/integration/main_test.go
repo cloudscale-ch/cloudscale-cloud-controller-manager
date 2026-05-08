@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -146,44 +147,96 @@ func (s *IntegrationTestSuite) CreateRegionalFloatingIP(region string) (
 	return ip, nil
 }
 
-func (s *IntegrationTestSuite) TearDownTest() {
-	errors := 0
+func (s *IntegrationTestSuite) deleteServices(ctx context.Context) error {
+	svcs, err := s.k8s.CoreV1().Services(s.ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("listing services in namespace %s failed: %w", s.ns, err)
+	}
 
+	for _, svc := range svcs.Items {
+		if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+			continue
+		}
+		err := s.k8s.CoreV1().Services(s.ns).Delete(
+			ctx,
+			svc.Name,
+			metav1.DeleteOptions{},
+		)
+		if err != nil {
+			s.T().Logf("deleting loadbalancer service %s in namespace %s failed: %s", svc.Name, s.ns, err)
+		}
+	}
+
+	// Wait for loadbalancer services to be deleted
+	err = wait.PollUntilContextCancel(ctx, 1*time.Second, true,
+		func(ctx context.Context) (bool, error) {
+			svcs, err := s.k8s.CoreV1().Services(s.ns).List(ctx, metav1.ListOptions{})
+			if err != nil {
+				return false, err
+			}
+			for _, svc := range svcs.Items {
+				if svc.Spec.Type == v1.ServiceTypeLoadBalancer {
+					return false, nil
+				}
+			}
+			return true, nil
+		})
+	if err != nil {
+		return fmt.Errorf("took too long to delete loadbalancer services in namespace %s: %w", s.ns, err)
+	}
+
+	return nil
+}
+
+func (s *IntegrationTestSuite) TearDownTest() {
+	errCount := 0
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	// 1. Delete services
+	svcCtx, svcCancel := context.WithTimeout(ctx, 3*time.Minute)
+	if err := s.deleteServices(svcCtx); err != nil {
+		s.T().Logf("failed to delete services: %s", err)
+		errCount++
+	}
+	svcCancel()
+
+	// 2. Delete API resources
 	if s.resources != nil {
 		for _, url := range s.resources {
 			req, err := s.api.NewRequest(
-				context.Background(), http.MethodDelete, url, nil)
+				ctx, http.MethodDelete, url, nil)
 			if err != nil {
 				s.T().Logf("preparing to delete %s failed: %s", url, err)
-				errors++
+				errCount++
 			}
 
-			err = s.api.Do(context.Background(), req, nil)
+			err = s.api.Do(ctx, req, nil)
 			if err != nil {
+				var apiErr *cloudscale.ErrorResponse
+				if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+					continue
+				}
 				s.T().Logf("deleting %s failed: %s", url, err)
-				errors++
+				errCount++
 			}
 		}
 	}
 	s.resources = nil
 
+	// 3. Delete namespace
 	err := s.k8s.CoreV1().Namespaces().Delete(
-		context.Background(),
+		ctx,
 		s.ns,
 		metav1.DeleteOptions{},
 	)
 
 	if err != nil {
 		s.T().Logf("could not delete namespace %s: %s", s.ns, err)
-		errors++
+		errCount++
 	}
 
-	// Wait up to five minutes for the namespace to be deleted
-	timeout := 5 * time.Minute
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
+	// Wait for the namespace to be deleted
 	err = wait.PollUntilContextCancel(ctx, 1*time.Second, true,
 		func(ctx context.Context) (bool, error) {
 			_, err := s.k8s.CoreV1().Namespaces().Get(
@@ -208,11 +261,11 @@ func (s *IntegrationTestSuite) TearDownTest() {
 
 	if err != nil {
 		s.T().Logf("took too long to delete namespace %s: %s", s.ns, err)
-		errors++
+		errCount++
 	}
 
-	if errors > 0 {
-		panic(fmt.Sprintf("failed cleanup test: %d errors", errors))
+	if errCount > 0 {
+		panic(fmt.Sprintf("failed cleanup test: %d errors", errCount))
 	}
 
 	s.ns = ""
