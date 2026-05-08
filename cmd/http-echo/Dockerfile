@@ -19,6 +19,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 # Production stage - distroless static
 FROM gcr.io/distroless/static-debian11
 
+LABEL org.opencontainers.image.description="Internal test helper for CCM integration tests. Not for general use."
+
 COPY --from=build /http-echo /http-echo
 
 ENTRYPOINT ["/http-echo"]
