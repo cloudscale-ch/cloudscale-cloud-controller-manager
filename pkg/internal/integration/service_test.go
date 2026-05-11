@@ -101,6 +101,13 @@ func (s *IntegrationTestSuite) AwaitDeploymentReady(name string, timeout time.Du
 	s.Require().NoError(err, "deployment %s did not become ready within %v", name, timeout)
 }
 
+func (s *IntegrationTestSuite) CreateAndAwaitDeployment(
+	name string, image string, replicas int32, protocol v1.Protocol, port int32, options ...func(*appsv1.DeploymentSpec)) {
+
+	s.CreateDeployment(name, image, replicas, protocol, port, options...)
+	s.AwaitDeploymentReady(name, 120*time.Second)
+}
+
 func (s *IntegrationTestSuite) CreateConfigMap(name string, data map[string]string) {
 	_, err := s.k8s.CoreV1().ConfigMaps(s.ns).Create(
 		context.Background(),
@@ -191,7 +198,8 @@ func (s *IntegrationTestSuite) ExposeDeployment(
 func (s *IntegrationTestSuite) RunJob(
 	image string, timeout time.Duration, cmd ...string) string {
 
-	ctx, _ := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 	name := fmt.Sprintf("job-%08x", rand.Uint32())
 
 	// Specify the job
@@ -347,7 +355,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 
 	// Deploy a TCP server that returns the hostname
 	s.T().Log("Creating nginx deployment")
-	s.CreateDeployment("nginx", "docker.io/nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
+	s.CreateAndAwaitDeployment("nginx", "docker.io/nginxdemos/hello@sha256:751bf8933179b086091927eefd952f46b19ba37fa22d47e88da1c0c9921cbc8e", 2, v1.ProtocolTCP, 80)
 
 	// Expose the deployment using a LoadBalancer service
 	s.ExposeDeployment("nginx", nil,
@@ -430,7 +438,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEndNodeSelector() {
 	secondNodeName := nodes.Items[1].Name
 
 	s.T().Log("Creating nginx deployment")
-	s.CreateDeployment("nginx-selected", "docker.io/nginxdemos/hello:plain-text", 1, v1.ProtocolTCP, 80, func(spec *appsv1.DeploymentSpec) {
+	s.CreateAndAwaitDeployment("nginx-selected", "docker.io/nginxdemos/hello@sha256:751bf8933179b086091927eefd952f46b19ba37fa22d47e88da1c0c9921cbc8e", 1, v1.ProtocolTCP, 80, func(spec *appsv1.DeploymentSpec) {
 		spec.Template.Spec.NodeSelector = map[string]string{
 			"kubernetes.io/hostname": firstNodeName,
 		}
@@ -566,7 +574,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEndUDP() {
 
 	// Deploy a UDP echo server
 	s.T().Log("Creating udp-echo deployment")
-	s.CreateDeployment("udp-echo", "docker.io/alpine/socat", 2, v1.ProtocolUDP, 5353, func(spec *appsv1.DeploymentSpec) {
+	s.CreateAndAwaitDeployment("udp-echo", "docker.io/alpine/socat@sha256:a26f4bcee25ad4a4096ce91e596c0a2fffcbb51f7fd198dd87a5c86eae66f0e1", 2, v1.ProtocolUDP, 5353, func(spec *appsv1.DeploymentSpec) {
 		spec.Template.Spec.Containers[0].Command = []string{"socat"}
 		spec.Template.Spec.Containers[0].Args = []string{"-v", "UDP4-RECVFROM:5353,fork", "SYSTEM:echo 'I could tell you a UDP joke, but you might not get it...',pipes"}
 	})
@@ -678,63 +686,32 @@ func (s *IntegrationTestSuite) TestServiceEndToEndDualProtocol() {
 	})
 
 	// Create deployment with both TCP and UDP ports
-	replicas := int32(2)
-	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{Name: "dns-server"},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app": "dns-server",
-				},
+	s.CreateAndAwaitDeployment("dns-server", "docker.io/coredns/coredns@sha256:9b9128672209474da07c91439bf15ed704ae05ad918dd6454e5b6ae14e35fee6", 2, v1.ProtocolUDP, 53, func(spec *appsv1.DeploymentSpec) {
+		spec.Template.Spec.Containers[0].Args = []string{"-conf", "/etc/coredns/Corefile"}
+		spec.Template.Spec.Containers[0].Ports = append(spec.Template.Spec.Containers[0].Ports, v1.ContainerPort{
+			ContainerPort: 53,
+			Protocol:      v1.ProtocolTCP,
+			Name:          "dns-tcp",
+		})
+		spec.Template.Spec.Containers[0].VolumeMounts = []v1.VolumeMount{
+			{
+				Name:      "config",
+				MountPath: "/etc/coredns",
 			},
-			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app": "dns-server",
-					},
-				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							Name:  "coredns",
-							Image: "docker.io/coredns/coredns:1.13.1",
-							Args:  []string{"-conf", "/etc/coredns/Corefile"},
-							Ports: []v1.ContainerPort{
-								{ContainerPort: 53, Protocol: v1.ProtocolUDP, Name: "dns-udp"},
-								{ContainerPort: 53, Protocol: v1.ProtocolTCP, Name: "dns-tcp"},
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      "config",
-									MountPath: "/etc/coredns",
-								},
-							},
-						},
-					},
-					Volumes: []v1.Volume{
-						{
-							Name: "config",
-							VolumeSource: v1.VolumeSource{
-								ConfigMap: &v1.ConfigMapVolumeSource{
-									LocalObjectReference: v1.LocalObjectReference{
-										Name: "coredns-config",
-									},
-								},
-							},
+		}
+		spec.Template.Spec.Volumes = []v1.Volume{
+			{
+				Name: "config",
+				VolumeSource: v1.VolumeSource{
+					ConfigMap: &v1.ConfigMapVolumeSource{
+						LocalObjectReference: v1.LocalObjectReference{
+							Name: "coredns-config",
 						},
 					},
 				},
 			},
-		},
-	}
-
-	_, err := s.k8s.AppsV1().Deployments(s.ns).Create(
-		context.Background(),
-		deployment,
-		metav1.CreateOptions{},
-	)
-	s.Require().NoError(err)
+		}
+	})
 
 	s.ExposeDeployment("dns-server", nil,
 		WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 53, TargetPort: 53}),
@@ -852,7 +829,7 @@ func (s *IntegrationTestSuite) TestServiceVIPAddresses() {
 
 	// Deploy a TCP server that returns something
 	s.T().Log("Creating foo deployment")
-	s.CreateDeployment("nginx", "docker.io/nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
+	s.CreateAndAwaitDeployment("nginx", "docker.io/nginxdemos/hello@sha256:751bf8933179b086091927eefd952f46b19ba37fa22d47e88da1c0c9921cbc8e", 2, v1.ProtocolTCP, 80)
 
 	// Expose the deployment using a LoadBalancer service
 	s.ExposeDeployment("nginx", map[string]string{
@@ -892,7 +869,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	// single instance as we want to check that the routing works right with
 	// all policies.
 	s.T().Log("Creating peeraddr deployment")
-	s.CreateDeployment("peeraddr", "ghcr.io/majd/ip-curl", 1, v1.ProtocolTCP, 3000)
+	s.CreateAndAwaitDeployment("peeraddr", "ghcr.io/majd/ip-curl@sha256:b74ae5eb399500ed1367048af4497c1c6c8674f9a52782470b88ff2b790e16d6", 1, v1.ProtocolTCP, 3000)
 
 	// Waits until the request is received through the given prefix and
 	// ten responses with the expected address come back.
@@ -1018,7 +995,7 @@ func (s *IntegrationTestSuite) RunTestServiceWithFloatingIP(
 
 	// Deploy a TCP server that returns the hostname
 	s.T().Log("Creating nginx deployment")
-	s.CreateDeployment("nginx", "docker.io/nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
+	s.CreateAndAwaitDeployment("nginx", "docker.io/nginxdemos/hello@sha256:751bf8933179b086091927eefd952f46b19ba37fa22d47e88da1c0c9921cbc8e", 2, v1.ProtocolTCP, 80)
 
 	// Expose the deployment using a LoadBalancer service with Floating IP
 	s.ExposeDeployment("nginx", map[string]string{
@@ -1080,7 +1057,7 @@ func (s *IntegrationTestSuite) TestFloatingIPConflicts() {
 
 	// Deploy a TCP server that returns the hostname
 	s.T().Log("Creating nginx deployment")
-	s.CreateDeployment("nginx", "docker.io/nginxdemos/hello:plain-text", 2, v1.ProtocolTCP, 80)
+	s.CreateAndAwaitDeployment("nginx", "docker.io/nginxdemos/hello@sha256:751bf8933179b086091927eefd952f46b19ba37fa22d47e88da1c0c9921cbc8e", 2, v1.ProtocolTCP, 80)
 
 	// Expose the deployment using a LoadBalancer service with Floating IP
 	s.ExposeDeployment("nginx", map[string]string{
@@ -1118,12 +1095,9 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 	}
 
 	s.T().Log("Creating http-echo deployment", "image", httpEchoImage)
-	s.CreateDeployment("http-echo", httpEchoImage, 2, v1.ProtocolTCP, 80, func(spec *appsv1.DeploymentSpec) {
+	s.CreateAndAwaitDeployment("http-echo", httpEchoImage, 2, v1.ProtocolTCP, 80, func(spec *appsv1.DeploymentSpec) {
 		spec.Template.Spec.Containers[0].Args = []string{"-host", "0.0.0.0", "-port", "80"}
 	})
-
-	// Wait for all replicas to be ready
-	s.AwaitDeploymentReady("http-echo", 120*time.Second)
 
 	// Expose the deployment using a LoadBalancer service
 	s.ExposeDeployment("http-echo", map[string]string{
@@ -1169,7 +1143,7 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 	// Sending a request from inside the cluster does not work, unless we
 	// use a workaround.
 	s.T().Log("Testing PROXY protocol from inside")
-	used = s.RunJob("curlimages/curl", 90*time.Second, "curl", "-s", url)
+	used = s.RunJob("docker.io/curlimages/curl@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a", 90*time.Second, "curl", "-s", url)
 	s.Assert().Equal("false\n", used)
 
 	// The workaround works by using an IP that needs to be reolved via name
@@ -1183,7 +1157,7 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 	}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 	s.T().Log("Testing PROXY protocol from inside with workaround")
-	used = s.RunJob("curlimages/curl", 90*time.Second, "curl", "-s", url)
+	used = s.RunJob("docker.io/curlimages/curl@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a", 90*time.Second, "curl", "-s", url)
 	s.Assert().Equal("true\n", used)
 
 	// On newer Kubernetes releases, the defaults just work
@@ -1196,7 +1170,7 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 		}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
 		s.T().Log("Testing PROXY protocol on newer Kubernetes releases")
-		used = s.RunJob("curlimages/curl", 90*time.Second, "curl", "-s", url)
+		used = s.RunJob("docker.io/curlimages/curl@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a", 90*time.Second, "curl", "-s", url)
 		s.Assert().Equal("true\n", used)
 	}
 }
