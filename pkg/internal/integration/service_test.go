@@ -1088,6 +1088,8 @@ func (s *IntegrationTestSuite) TestFloatingIPConflicts() {
 
 func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 
+	const curlImage = "docker.io/curlimages/curl@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a"
+
 	// Deploy our http-echo server to check for proxy connections
 	httpEchoImage := os.Getenv("HTTP_ECHO_IMAGE")
 	if httpEchoImage == "" {
@@ -1143,7 +1145,7 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 	// Sending a request from inside the cluster does not work, unless we
 	// use a workaround.
 	s.T().Log("Testing PROXY protocol from inside")
-	used = s.RunJob("docker.io/curlimages/curl@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a", 90*time.Second, "curl", "-s", url)
+	used = s.RunJob(curlImage, 90*time.Second, "curl", "-s", url)
 	s.Assert().Equal("false\n", used)
 
 	// The workaround works by using an IP that needs to be reolved via name
@@ -1156,8 +1158,14 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 		),
 	}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
+	// The CCM needs to reconcile the annotation change and flip the service
+	// status. Poll until we observe the workaround taking effect.
 	s.T().Log("Testing PROXY protocol from inside with workaround")
-	used = s.RunJob("docker.io/curlimages/curl@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a", 90*time.Second, "curl", "-s", url)
+	s.Assert().Eventually(func() bool {
+		used = s.RunJob(curlImage, 90*time.Second, "curl", "-s", url)
+		s.T().Logf("PROXY protocol used: %q", strings.TrimSpace(used))
+		return used == "true\n"
+	}, 3*time.Minute, 1*time.Second)
 	s.Assert().Equal("true\n", used)
 
 	// On newer Kubernetes releases, the defaults just work
@@ -1169,8 +1177,14 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 			"k8s.cloudscale.ch/loadbalancer-pool-protocol": "proxy",
 		}, WithServicePort(ServicePortSpec{Protocol: v1.ProtocolTCP, Port: 80, TargetPort: 80}))
 
+		// Same as above: wait for CCM to converge on the
+		// new state before asserting.
 		s.T().Log("Testing PROXY protocol on newer Kubernetes releases")
-		used = s.RunJob("docker.io/curlimages/curl@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a", 90*time.Second, "curl", "-s", url)
+		s.Assert().Eventually(func() bool {
+			used = s.RunJob(curlImage, 90*time.Second, "curl", "-s", url)
+			s.T().Logf("PROXY protocol used: %q", strings.TrimSpace(used))
+			return used == "true\n"
+		}, 3*time.Minute, 1*time.Second)
 		s.Assert().Equal("true\n", used)
 	}
 }
