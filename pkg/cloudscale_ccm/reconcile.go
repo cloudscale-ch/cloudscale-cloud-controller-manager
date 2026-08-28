@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"slices"
 	"strings"
 	"time"
@@ -749,9 +748,7 @@ func reconcileLbState(
 			break
 		}
 
-		// Wait between 5-7.5 seconds between state fetches
-		// #nosec G404
-		wait := time.Duration(5000+rand.Intn(2500)) * time.Millisecond
+		wait := 500 * time.Millisecond
 
 		select {
 		case <-ctx.Done():
