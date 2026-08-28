@@ -138,6 +138,16 @@ func (m *MockAPIServer) Start() {
 	m.server = httptest.NewServer(m.mux)
 }
 
+// HandleFunc registers a custom handler for the given pattern.
+// This allows intercepting requests dynamically, e.g. to track invocations.
+func (m *MockAPIServer) HandleFunc(pattern string, handler http.HandlerFunc) {
+	if m.mux == nil {
+		m.mux = http.NewServeMux()
+		m.On("/", 404, "{}")
+	}
+	m.mux.HandleFunc(pattern, handler)
+}
+
 // Close stops/closes the server and resets it.
 func (m *MockAPIServer) Close() {
 	if m.server != nil {
