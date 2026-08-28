@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -308,6 +311,24 @@ type loadbalancer struct {
 	srv      serverMapper
 	k8s      kubernetes.Interface
 	recorder record.EventRecorder
+	muMap    sync.Map
+}
+
+func (l *loadbalancer) lockForService(uid types.UID) func() {
+	rawMu, _ := l.muMap.LoadOrStore(lockKey(uid), new(sync.Mutex))
+	mu := rawMu.(*sync.Mutex)
+	start := time.Now()
+	klog.V(4).InfoS("acquiring service lock", "uid", uid)
+	mu.Lock()
+
+	return func() {
+		klog.V(4).InfoS("releasing service lock", "uid", uid, "duration", time.Since(start))
+		mu.Unlock()
+	}
+}
+
+func lockKey(uid types.UID) string {
+	return string(uid)
 }
 
 // GetLoadBalancer returns whether the specified load balancer exists, and
@@ -391,6 +412,8 @@ func (l *loadbalancer) EnsureLoadBalancer(
 	service *v1.Service,
 	nodes []*v1.Node,
 ) (*v1.LoadBalancerStatus, error) {
+	unlock := l.lockForService(service.UID)
+	defer unlock()
 
 	// Detect configuration issues and abort if they are found
 	serviceInfo := newServiceInfo(service, clusterName)
@@ -497,6 +520,8 @@ func (l *loadbalancer) UpdateLoadBalancer(
 	service *v1.Service,
 	nodes []*v1.Node,
 ) error {
+	unlock := l.lockForService(service.UID)
+	defer unlock()
 
 	// Detect configuration issues and abort if they are found
 	serviceInfo := newServiceInfo(service, clusterName)
@@ -556,6 +581,8 @@ func (l *loadbalancer) EnsureLoadBalancerDeleted(
 	clusterName string,
 	service *v1.Service,
 ) error {
+	unlock := l.lockForService(service.UID)
+	defer unlock()
 
 	// Detect configuration issues and abort if they are found
 	serviceInfo := newServiceInfo(service, clusterName)
