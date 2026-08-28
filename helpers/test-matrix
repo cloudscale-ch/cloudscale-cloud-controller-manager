@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Make sure the k8test/helpers/release-set CLI is available
-source helpers/run-in-test-cluster
-ensure-k8test > /dev/null
+# Read explicit Kubernetes versions from config
+K8S_VERSIONS=$(jq -r '.versions' .github/kubernetes-versions.json)
 
 # Returns the matrix entry for the given index (1-n)
 function matrixentry {
   # Kubernetes releases
-  k8test/helpers/release-set --kubernetes=$(( 1 - $1 )) --limit kubernetes | jq -r '.kubernetes.version'
+  echo "$K8S_VERSIONS" | jq -r ".[$(( $1 - 1 ))]"
 
   # The the private subnet range
   echo "10.100.$1.0/24"

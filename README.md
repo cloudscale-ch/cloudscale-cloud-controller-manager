@@ -18,6 +18,20 @@ For example, if the current release is `1.29.0`, we support the following:
 
 Older releases should work as well, but we do not test them automatically, and we may decide not to fix bugs related to older releases.
 
+Integration tests run against explicit Kubernetes versions defined in `.github/kubernetes-versions.json`.
+
+To update tested versions:
+1. Edit `.github/kubernetes-versions.json`
+2. Update to the 3 latest minor releases
+3. Commit and push
+
+Example:
+```json
+{
+  "versions": ["1.36.0", "1.35.0", "1.34.0"]
+}
+```
+
 ## Try It Out
 
 To test the CCM on a vanilla Kubernetes cluster, you can use `helpers/run-in-test-cluster`. This will create a small Kubernetes cluster at cloudscale.ch,
