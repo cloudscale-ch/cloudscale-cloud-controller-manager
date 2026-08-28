@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"k8s.io/klog/v2"
 )
 
 type Action interface {
@@ -50,6 +51,18 @@ func (a *CreateLbAction) Label() string {
 func (a *CreateLbAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
 
+	existing, err := client.LoadBalancers.List(ctx)
+	if err == nil {
+		for _, lb := range existing {
+			if lb.Name == a.lb.Name {
+				klog.InfoS("lb already exists, skipping create",
+					"name", a.lb.Name, "uuid", lb.UUID)
+
+				return Refresh, nil
+			}
+		}
+	}
+
 	addrs := make([]cloudscale.VIPAddressRequest, 0, len(a.lb.VIPAddresses))
 	for _, addr := range a.lb.VIPAddresses {
 		addrs = append(addrs, cloudscale.VIPAddressRequest{
@@ -58,7 +71,7 @@ func (a *CreateLbAction) Run(
 		})
 	}
 
-	_, err := client.LoadBalancers.Create(ctx, &cloudscale.LoadBalancerRequest{
+	_, err = client.LoadBalancers.Create(ctx, &cloudscale.LoadBalancerRequest{
 		Name:         a.lb.Name,
 		Flavor:       a.lb.Flavor.Slug,
 		VIPAddresses: &addrs,
