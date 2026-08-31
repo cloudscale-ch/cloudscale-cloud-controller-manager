@@ -1,6 +1,7 @@
 package testkit
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -18,8 +19,8 @@ type HelloResponse struct {
 	RequestID     string
 }
 
-func HelloNginx(addr string, port uint16) (*HelloResponse, error) {
-	body, err := HTTPRead("http://" + net.JoinHostPort(addr, strconv.FormatUint(
+func HelloNginx(ctx context.Context, addr string, port uint16) (*HelloResponse, error) {
+	body, err := HTTPRead(ctx, "http://"+net.JoinHostPort(addr, strconv.FormatUint(
 		uint64(port), 10)))
 	if err != nil {
 		return nil, err
@@ -49,7 +50,7 @@ func HelloNginx(addr string, port uint16) (*HelloResponse, error) {
 	return &response, nil
 }
 
-func HTTPRead(url string) (string, error) {
+func HTTPRead(ctx context.Context, url string) (string, error) {
 	// Disable keep-alive, as that works around round-robin
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.DisableKeepAlives = true
@@ -59,11 +60,18 @@ func HTTPRead(url string) (string, error) {
 		Transport: transport,
 	}
 
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

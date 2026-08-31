@@ -18,7 +18,6 @@ type serviceInfo struct {
 }
 
 func newServiceInfo(service *v1.Service, clusterName string) *serviceInfo {
-
 	if service == nil {
 		panic("v1.Service pointer is nil")
 	}
@@ -33,7 +32,6 @@ func newServiceInfo(service *v1.Service, clusterName string) *serviceInfo {
 // This is due to the fact that Kubernetes might send a service our way, that
 // is not handled by us.
 func (s serviceInfo) isSupported() (bool, error) {
-
 	// If you specify .spec.loadBalancerClass, it is assumed that a load
 	// balancer implementation that matches the specified class is watching
 	// for Services. Any default load balancer implementation (for example,

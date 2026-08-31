@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/oauth2"
 	v1 "k8s.io/api/core/v1"

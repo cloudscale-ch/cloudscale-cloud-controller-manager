@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -323,7 +323,6 @@ func (l *loadbalancer) GetLoadBalancer(
 	clusterName string,
 	service *v1.Service,
 ) (status *v1.LoadBalancerStatus, exists bool, err error) {
-
 	serviceInfo := newServiceInfo(service, clusterName)
 	if supported, _ := serviceInfo.isSupported(); !supported {
 		return nil, false, nil
@@ -357,7 +356,7 @@ func (l *loadbalancer) GetLoadBalancer(
 
 // GetLoadBalancerName returns the name of the load balancer. Implementations
 // must treat the *v1.Service parameter as read-only and not modify it.
-func (lb *loadbalancer) GetLoadBalancerName(
+func (l *loadbalancer) GetLoadBalancerName(
 	ctx context.Context,
 	clusterName string,
 	service *v1.Service,
@@ -391,7 +390,6 @@ func (l *loadbalancer) EnsureLoadBalancer(
 	service *v1.Service,
 	nodes []*v1.Node,
 ) (*v1.LoadBalancerStatus, error) {
-
 	// Detect configuration issues and abort if they are found
 	serviceInfo := newServiceInfo(service, clusterName)
 	if err := l.ensureValidConfig(ctx, serviceInfo); err != nil {
@@ -497,7 +495,6 @@ func (l *loadbalancer) UpdateLoadBalancer(
 	service *v1.Service,
 	nodes []*v1.Node,
 ) error {
-
 	// Detect configuration issues and abort if they are found
 	serviceInfo := newServiceInfo(service, clusterName)
 	if err := l.ensureValidConfig(ctx, serviceInfo); err != nil {
@@ -556,7 +553,6 @@ func (l *loadbalancer) EnsureLoadBalancerDeleted(
 	clusterName string,
 	service *v1.Service,
 ) error {
-
 	// Detect configuration issues and abort if they are found
 	serviceInfo := newServiceInfo(service, clusterName)
 	if err := l.ensureValidConfig(ctx, serviceInfo); err != nil {
@@ -577,7 +573,6 @@ func (l *loadbalancer) loadBalancerStatus(
 	serviceInfo *serviceInfo,
 	lb *cloudscale.LoadBalancer,
 ) (*v1.LoadBalancerStatus, error) {
-
 	status := v1.LoadBalancerStatus{}
 
 	// When forcing the use of a hostname, there's exactly one ingress item
@@ -630,7 +625,6 @@ func (l *loadbalancer) loadBalancerStatus(
 // been made.
 func (l *loadbalancer) ensureValidConfig(
 	ctx context.Context, serviceInfo *serviceInfo) error {
-
 	// Skip if the service is not supported by this CCM
 	if supported, err := serviceInfo.isSupported(); !supported {
 		return err
@@ -644,7 +638,6 @@ func (l *loadbalancer) ensureValidConfig(
 	}
 
 	if len(ips) > 0 {
-
 		info := make([]string, 0, len(ips))
 		for ip, service := range ips {
 			info = append(info, fmt.Sprintf("%s->%s", ip, service))
@@ -667,7 +660,6 @@ func (l *loadbalancer) ensureValidConfig(
 // assigned to two services, the IP and the name of the service are returned.
 func (l *loadbalancer) findIPsAssignedElsewhere(
 	ctx context.Context, serviceInfo *serviceInfo) (map[string]string, error) {
-
 	ips, err := serviceInfo.annotationList(LoadBalancerFloatingIPs)
 	if err != nil {
 		return nil, err

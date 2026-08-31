@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 
@@ -71,12 +71,10 @@ func TestDesiredZone(t *testing.T) {
 	}
 
 	servers := []cloudscale.Server{
-		{Name: "foo", ZonalResource: cloudscale.ZonalResource{
-			Zone: cloudscale.Zone{Slug: "lpg1"},
-		}},
-		{Name: "bar", ZonalResource: cloudscale.ZonalResource{
-			Zone: cloudscale.Zone{Slug: "rma1"},
-		}},
+		{Name: "foo",
+			Zone: cloudscale.ZoneStub{Slug: "lpg1"}},
+		{Name: "bar",
+			Zone: cloudscale.ZoneStub{Slug: "rma1"}},
 	}
 
 	// Nodes are in different zones, so it's unclear where to put the lb
@@ -106,11 +104,9 @@ func TestDesiredService(t *testing.T) {
 	servers := []cloudscale.Server{
 		{
 			Name: "worker-1",
-			ZonalResource: cloudscale.ZonalResource{
-				Zone: cloudscale.Zone{Slug: "rma1"},
-			},
-			Interfaces: []cloudscale.Interface{{
-				Addresses: []cloudscale.Address{{
+			Zone: cloudscale.ZoneStub{Slug: "rma1"},
+			Interfaces: []cloudscale.ServerInterface{{
+				Addresses: []cloudscale.ServerAddress{{
 					Address: "10.0.0.1",
 					Subnet: cloudscale.SubnetStub{
 						UUID: "00000000-0000-0000-0000-000000000000",
@@ -120,11 +116,9 @@ func TestDesiredService(t *testing.T) {
 		},
 		{
 			Name: "worker-2",
-			ZonalResource: cloudscale.ZonalResource{
-				Zone: cloudscale.Zone{Slug: "rma1"},
-			},
-			Interfaces: []cloudscale.Interface{{
-				Addresses: []cloudscale.Address{{
+			Zone: cloudscale.ZoneStub{Slug: "rma1"},
+			Interfaces: []cloudscale.ServerInterface{{
+				Addresses: []cloudscale.ServerAddress{{
 					Address: "10.0.0.2",
 					Subnet: cloudscale.SubnetStub{
 						UUID: "00000000-0000-0000-0000-000000000000",
@@ -214,11 +208,9 @@ func TestDesiredServiceUDP(t *testing.T) {
 	servers := []cloudscale.Server{
 		{
 			Name: "worker-1",
-			ZonalResource: cloudscale.ZonalResource{
-				Zone: cloudscale.Zone{Slug: "rma1"},
-			},
-			Interfaces: []cloudscale.Interface{{
-				Addresses: []cloudscale.Address{{
+			Zone: cloudscale.ZoneStub{Slug: "rma1"},
+			Interfaces: []cloudscale.ServerInterface{{
+				Addresses: []cloudscale.ServerAddress{{
 					Address: "10.0.0.1",
 					Subnet: cloudscale.SubnetStub{
 						UUID: "00000000-0000-0000-0000-000000000000",
@@ -228,11 +220,9 @@ func TestDesiredServiceUDP(t *testing.T) {
 		},
 		{
 			Name: "worker-2",
-			ZonalResource: cloudscale.ZonalResource{
-				Zone: cloudscale.Zone{Slug: "rma1"},
-			},
-			Interfaces: []cloudscale.Interface{{
-				Addresses: []cloudscale.Address{{
+			Zone: cloudscale.ZoneStub{Slug: "rma1"},
+			Interfaces: []cloudscale.ServerInterface{{
+				Addresses: []cloudscale.ServerAddress{{
 					Address: "10.0.0.2",
 					Subnet: cloudscale.SubnetStub{
 						UUID: "00000000-0000-0000-0000-000000000000",
@@ -313,11 +303,9 @@ func TestDesiredServiceDualProtocol(t *testing.T) {
 	servers := []cloudscale.Server{
 		{
 			Name: "worker-1",
-			ZonalResource: cloudscale.ZonalResource{
-				Zone: cloudscale.Zone{Slug: "rma1"},
-			},
-			Interfaces: []cloudscale.Interface{{
-				Addresses: []cloudscale.Address{{
+			Zone: cloudscale.ZoneStub{Slug: "rma1"},
+			Interfaces: []cloudscale.ServerInterface{{
+				Addresses: []cloudscale.ServerAddress{{
 					Address: "10.0.0.1",
 					Subnet: cloudscale.SubnetStub{
 						UUID: "00000000-0000-0000-0000-000000000000",
@@ -327,11 +315,9 @@ func TestDesiredServiceDualProtocol(t *testing.T) {
 		},
 		{
 			Name: "worker-2",
-			ZonalResource: cloudscale.ZonalResource{
-				Zone: cloudscale.Zone{Slug: "rma1"},
-			},
-			Interfaces: []cloudscale.Interface{{
-				Addresses: []cloudscale.Address{{
+			Zone: cloudscale.ZoneStub{Slug: "rma1"},
+			Interfaces: []cloudscale.ServerInterface{{
+				Addresses: []cloudscale.ServerAddress{{
 					Address: "10.0.0.2",
 					Subnet: cloudscale.SubnetStub{
 						UUID: "00000000-0000-0000-0000-000000000000",
@@ -586,15 +572,11 @@ func TestNextLbProhibitDangerousChanges(t *testing.T) {
 	// No automatic change of zone
 	one = &cloudscale.LoadBalancer{
 		Name: "foo",
-		ZonalResource: cloudscale.ZonalResource{
-			Zone: cloudscale.Zone{Slug: "lpg1"},
-		},
+		Zone: cloudscale.ZoneStub{Slug: "lpg1"},
 	}
 	two = &cloudscale.LoadBalancer{
 		Name: "bar",
-		ZonalResource: cloudscale.ZonalResource{
-			Zone: cloudscale.Zone{Slug: "rma1"},
-		},
+		Zone: cloudscale.ZoneStub{Slug: "rma1"},
 	}
 
 	assertError(&lbState{lb: one}, &lbState{lb: two})
@@ -934,7 +916,6 @@ func TestNextListenerActions(t *testing.T) {
 		actions.UpdateListenerTimeout("1", 1, "client-data-ms"),
 		actions.UpdateListenerTimeout("1", 3, "member-data-ms"),
 	})
-
 }
 
 func TestNextMonitorActions(t *testing.T) {
@@ -1086,12 +1067,10 @@ func TestLimitSubnets(t *testing.T) {
 	servers := []cloudscale.Server{
 		{
 			Name: "foo",
-			ZonalResource: cloudscale.ZonalResource{
-				Zone: cloudscale.Zone{Slug: "lpg1"},
-			},
-			Interfaces: []cloudscale.Interface{
+			Zone: cloudscale.ZoneStub{Slug: "lpg1"},
+			Interfaces: []cloudscale.ServerInterface{
 				{
-					Addresses: []cloudscale.Address{{
+					Addresses: []cloudscale.ServerAddress{{
 						Address: "10.0.1.1",
 						Subnet: cloudscale.SubnetStub{
 							UUID: "00000000-0000-0000-0000-000000000001",
@@ -1099,7 +1078,7 @@ func TestLimitSubnets(t *testing.T) {
 					}},
 				},
 				{
-					Addresses: []cloudscale.Address{{
+					Addresses: []cloudscale.ServerAddress{{
 						Address: "10.0.2.1",
 						Subnet: cloudscale.SubnetStub{
 							UUID: "00000000-0000-0000-0000-000000000002",
@@ -1110,12 +1089,10 @@ func TestLimitSubnets(t *testing.T) {
 		},
 		{
 			Name: "bar",
-			ZonalResource: cloudscale.ZonalResource{
-				Zone: cloudscale.Zone{Slug: "lpg1"},
-			},
-			Interfaces: []cloudscale.Interface{
+			Zone: cloudscale.ZoneStub{Slug: "lpg1"},
+			Interfaces: []cloudscale.ServerInterface{
 				{
-					Addresses: []cloudscale.Address{{
+					Addresses: []cloudscale.ServerAddress{{
 						Address: "10.0.1.2",
 						Subnet: cloudscale.SubnetStub{
 							UUID: "00000000-0000-0000-0000-000000000001",
@@ -1123,7 +1100,7 @@ func TestLimitSubnets(t *testing.T) {
 					}},
 				},
 				{
-					Addresses: []cloudscale.Address{{
+					Addresses: []cloudscale.ServerAddress{{
 						Address: "10.0.2.2",
 						Subnet: cloudscale.SubnetStub{
 							UUID: "00000000-0000-0000-0000-000000000002",

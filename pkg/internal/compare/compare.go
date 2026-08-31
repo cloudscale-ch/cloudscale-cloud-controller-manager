@@ -12,7 +12,6 @@ func Diff[T any](
 	actual []T,
 	key func(item T) string,
 ) (toDelete []T, toCreate []T) {
-
 	d := make(map[string]T)
 	a := make(map[string]T)
 

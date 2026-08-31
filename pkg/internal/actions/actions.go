@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 )
 
 type Action interface {
@@ -29,7 +29,6 @@ func (a *RefetchAction) Label() string {
 
 func (a *RefetchAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	return Refresh, nil
 }
 
@@ -49,7 +48,6 @@ func (a *CreateLbAction) Label() string {
 
 func (a *CreateLbAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	addrs := make([]cloudscale.VIPAddressRequest, 0, len(a.lb.VIPAddresses))
 	for _, addr := range a.lb.VIPAddresses {
 		addrs = append(addrs, cloudscale.VIPAddressRequest{
@@ -62,9 +60,7 @@ func (a *CreateLbAction) Run(
 		Name:         a.lb.Name,
 		Flavor:       a.lb.Flavor.Slug,
 		VIPAddresses: &addrs,
-		ZonalResourceRequest: cloudscale.ZonalResourceRequest{
-			Zone: a.lb.Zone.Slug,
-		},
+		Zone:         a.lb.Zone.Slug,
 	})
 
 	return ProceedOnSuccess(err)
@@ -86,7 +82,6 @@ func (a *RenameLbAction) Label() string {
 
 func (a *RenameLbAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	return ProceedOnSuccess(client.LoadBalancers.Update(ctx, a.UUID,
 		&cloudscale.LoadBalancerRequest{
 			Name: a.Name,
@@ -110,7 +105,6 @@ func (a *AwaitLbAction) Label() string {
 
 func (a *AwaitLbAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	// Abort if there are states we cannot continue with
 	switch a.lb.Status {
 	case "changing":
@@ -120,7 +114,7 @@ func (a *AwaitLbAction) Run(
 	}
 }
 
-// DeleteMonitorsAction deletes the given resources.
+// DeleteResourceAction deletes the given resources.
 type DeleteResourceAction struct {
 	url string
 }
@@ -135,7 +129,6 @@ func (a *DeleteResourceAction) Label() string {
 
 func (a *DeleteResourceAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	req, err := client.NewRequest(ctx, http.MethodDelete, a.url, nil)
 	if err != nil {
 		return Errored, fmt.Errorf(
@@ -186,7 +179,6 @@ func (a *CreatePoolAction) Label() string {
 
 func (a *CreatePoolAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	_, err := client.LoadBalancerPools.Create(ctx,
 		&cloudscale.LoadBalancerPoolRequest{
 			Name:         a.pool.Name,
@@ -199,7 +191,7 @@ func (a *CreatePoolAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// CreaetPoolMemberAction creates a pool member.
+// CreatePoolMemberAction creates a pool member.
 type CreatePoolMemberAction struct {
 	poolUUID string
 	member   *cloudscale.LoadBalancerPoolMember
@@ -207,7 +199,6 @@ type CreatePoolMemberAction struct {
 
 func CreatePoolMember(
 	poolUUID string, member *cloudscale.LoadBalancerPoolMember) Action {
-
 	return &CreatePoolMemberAction{poolUUID: poolUUID, member: member}
 }
 
@@ -217,7 +208,6 @@ func (a *CreatePoolMemberAction) Label() string {
 
 func (a *CreatePoolMemberAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	_, err := client.LoadBalancerPoolMembers.Create(ctx, a.poolUUID,
 		&cloudscale.LoadBalancerPoolMemberRequest{
 			Name:         a.member.Name,
@@ -239,7 +229,6 @@ type CreateListenerAction struct {
 
 func CreateListener(
 	poolUUID string, listener *cloudscale.LoadBalancerListener) Action {
-
 	return &CreateListenerAction{poolUUID: poolUUID, listener: listener}
 }
 
@@ -249,7 +238,6 @@ func (a *CreateListenerAction) Label() string {
 
 func (a *CreateListenerAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	_, err := client.LoadBalancerListeners.Create(ctx,
 		&cloudscale.LoadBalancerListenerRequest{
 			Pool:                   a.poolUUID,
@@ -274,7 +262,6 @@ type UpdateListenerAllowedCIDRsAction struct {
 
 func UpdateListenerAllowedCIDRs(
 	listenerUUID string, allowedCIDRs []string) Action {
-
 	return &UpdateListenerAllowedCIDRsAction{
 		listenerUUID: listenerUUID,
 		allowedCIDRs: allowedCIDRs,
@@ -288,7 +275,6 @@ func (a *UpdateListenerAllowedCIDRsAction) Label() string {
 
 func (a *UpdateListenerAllowedCIDRsAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	err := client.LoadBalancerListeners.Update(ctx,
 		a.listenerUUID,
 		&cloudscale.LoadBalancerListenerRequest{
@@ -308,7 +294,6 @@ type UpdateListenerTimeoutAction struct {
 
 func UpdateListenerTimeout(
 	listenerUUID string, timeout int, key string) Action {
-
 	return &UpdateListenerTimeoutAction{
 		listenerUUID: listenerUUID,
 		timeout:      timeout,
@@ -323,7 +308,6 @@ func (a *UpdateListenerTimeoutAction) Label() string {
 
 func (a *UpdateListenerTimeoutAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	req := cloudscale.LoadBalancerListenerRequest{}
 
 	switch a.key {
@@ -335,7 +319,6 @@ func (a *UpdateListenerTimeoutAction) Run(
 		req.TimeoutMemberDataMS = a.timeout
 	default:
 		return Errored, fmt.Errorf("unknown timeout key: %s", a.key)
-
 	}
 
 	return ProceedOnSuccess(
@@ -350,7 +333,6 @@ type CreateHealthMonitorAction struct {
 
 func CreateHealthMonitor(
 	poolUUID string, monitor *cloudscale.LoadBalancerHealthMonitor) Action {
-
 	return &CreateHealthMonitorAction{poolUUID: poolUUID, monitor: monitor}
 }
 
@@ -360,7 +342,6 @@ func (a *CreateHealthMonitorAction) Label() string {
 
 func (a *CreateHealthMonitorAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	var http *cloudscale.LoadBalancerHealthMonitorHTTP
 	if a.monitor.HTTP != nil {
 		http = a.monitor.HTTP
@@ -378,7 +359,7 @@ func (a *CreateHealthMonitorAction) Run(
 			Type:          a.monitor.Type,
 			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTPRequest{
 				Method:        http.Method,
-				UrlPath:       http.UrlPath,
+				URLPath:       http.URLPath,
 				Version:       http.Version,
 				Host:          http.Host,
 				ExpectedCodes: http.ExpectedCodes,
@@ -389,7 +370,7 @@ func (a *CreateHealthMonitorAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorHTTPMethod updates a monitor's HTTP method.
+// UpdateMonitorHTTPMethodAction updates a monitor's HTTP method.
 type UpdateMonitorHTTPMethodAction struct {
 	monitorUUID string
 	method      string
@@ -409,7 +390,6 @@ func (a *UpdateMonitorHTTPMethodAction) Label() string {
 
 func (a *UpdateMonitorHTTPMethodAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	err := client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID,
 		&cloudscale.LoadBalancerHealthMonitorRequest{
 			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTPRequest{
@@ -421,7 +401,7 @@ func (a *UpdateMonitorHTTPMethodAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorHTTPPath updates a monitor's HTTP path.
+// UpdateMonitorHTTPPathAction updates a monitor's HTTP path.
 type UpdateMonitorHTTPPathAction struct {
 	monitorUUID string
 	path        string
@@ -441,11 +421,10 @@ func (a *UpdateMonitorHTTPPathAction) Label() string {
 
 func (a *UpdateMonitorHTTPPathAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	err := client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID,
 		&cloudscale.LoadBalancerHealthMonitorRequest{
 			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTPRequest{
-				UrlPath: a.path,
+				URLPath: a.path,
 			},
 		},
 	)
@@ -453,7 +432,7 @@ func (a *UpdateMonitorHTTPPathAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorHTTPHost updates a monitor's HTTP host.
+// UpdateMonitorHTTPHostAction updates a monitor's HTTP host.
 type UpdateMonitorHTTPHostAction struct {
 	monitorUUID string
 	host        *string
@@ -473,7 +452,6 @@ func (a *UpdateMonitorHTTPHostAction) Label() string {
 
 func (a *UpdateMonitorHTTPHostAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	err := client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID,
 		&cloudscale.LoadBalancerHealthMonitorRequest{
 			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTPRequest{
@@ -485,7 +463,7 @@ func (a *UpdateMonitorHTTPHostAction) Run(
 	return ProceedOnSuccess(err)
 }
 
-// UpdateMonitorHTTPExpectedCodes updates a monitor's HTTP expected codes.
+// UpdateMonitorHTTPExpectedCodesAction updates a monitor's HTTP expected codes.
 type UpdateMonitorHTTPExpectedCodesAction struct {
 	monitorUUID   string
 	expectedCodes []string
@@ -493,7 +471,6 @@ type UpdateMonitorHTTPExpectedCodesAction struct {
 
 func UpdateMonitorHTTPExpectedCodes(
 	monitorUUID string, expectedCodes []string) Action {
-
 	return &UpdateMonitorHTTPExpectedCodesAction{
 		monitorUUID:   monitorUUID,
 		expectedCodes: expectedCodes,
@@ -510,7 +487,6 @@ func (a *UpdateMonitorHTTPExpectedCodesAction) Label() string {
 
 func (a *UpdateMonitorHTTPExpectedCodesAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	err := client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID,
 		&cloudscale.LoadBalancerHealthMonitorRequest{
 			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTPRequest{
@@ -544,7 +520,6 @@ func (a *UpdateMonitorNumberAction) Label() string {
 
 func (a *UpdateMonitorNumberAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
 	req := cloudscale.LoadBalancerHealthMonitorRequest{}
 
 	switch a.key {
@@ -564,7 +539,7 @@ func (a *UpdateMonitorNumberAction) Run(
 		client.LoadBalancerHealthMonitors.Update(ctx, a.monitorUUID, &req))
 }
 
-// AssignFloatingIP assigns a Floating IP to the given LoadBalancer UUID.
+// AssignFloatingIPAction assigns a Floating IP to the given LoadBalancer UUID.
 type AssignFloatingIPAction struct {
 	ip     string
 	lbUUID string
@@ -580,8 +555,7 @@ func (a *AssignFloatingIPAction) Label() string {
 
 func (a *AssignFloatingIPAction) Run(
 	ctx context.Context, client *cloudscale.Client) (Control, error) {
-
-	ip := strings.SplitN(a.ip, "/", 2)[0]
+	ip, _, _ := strings.Cut(a.ip, "/")
 
 	err := client.FloatingIPs.Update(
 		ctx, ip, &cloudscale.FloatingIPUpdateRequest{

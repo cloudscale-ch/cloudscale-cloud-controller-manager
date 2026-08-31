@@ -3,9 +3,11 @@ package cloudscale_ccm
 import (
 	"context"
 	"errors"
+	"net/http"
+
+	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/limiter"
-	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 )
 
 // lbMapper maps cloudscale loadbalancers to Kubernetes services.
@@ -19,7 +21,6 @@ func (l *lbMapper) findByServiceInfo(
 	ctx context.Context,
 	serviceInfo *serviceInfo,
 ) *limiter.Limiter[cloudscale.LoadBalancer] {
-
 	// If we have a UUID, look for both the service and the UUID. Usually
 	// we expect to only see one, but it is possible for the UUID to point
 	// to another LB than the service name, in which case we return both
@@ -42,12 +43,11 @@ func (l *lbMapper) getByUUID(
 	ctx context.Context,
 	uuid string,
 ) *limiter.Limiter[cloudscale.LoadBalancer] {
-
 	server, err := l.client.LoadBalancers.Get(ctx, uuid)
 	if err != nil {
 		var response *cloudscale.ErrorResponse
 
-		if errors.As(err, &response) && response.StatusCode == 404 {
+		if errors.As(err, &response) && response.StatusCode == http.StatusNotFound {
 			return limiter.New[cloudscale.LoadBalancer](nil)
 		}
 
@@ -63,7 +63,6 @@ func (l *lbMapper) findByName(
 	ctx context.Context,
 	name string,
 ) *limiter.Limiter[cloudscale.LoadBalancer] {
-
 	if name == "" {
 		return limiter.New[cloudscale.LoadBalancer](
 			errors.New("no load balancer with empty name found"))

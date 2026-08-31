@@ -3,17 +3,36 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
-    # Group all GitHub Action updates into a single PR, ignoring minor/patch
-    # this seems to be the most pragmatic approach for this repo, given that
-    # we only have a single workflow so far.
+      interval: "weekly"
+      day: "monday"
     groups:
-      github-actions:
-        applies-to: version-updates
+      actions:
         patterns:
           - "*"
-    ignore:
-      - dependency-name: "*"
-        update-types: ["version-update:semver-minor", "version-update:semver-patch"]
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      k8s:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+      all-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
     cooldown:
       default-days: 7

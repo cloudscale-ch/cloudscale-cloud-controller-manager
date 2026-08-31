@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"golang.org/x/oauth2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -21,13 +21,13 @@ import (
 )
 
 const (
-	// Under no circumstances can this string change. It is for eternity.
+	// ProviderName can not change under no circumstances. It is for eternity.
 	ProviderName = "cloudscale"
 
-	// #nosec G101
-	AccessToken    = "CLOUDSCALE_ACCESS_TOKEN"
-	ApiUrl         = "CLOUDSCALE_API_URL"
-	ApiTimeout     = "CLOUDSCALE_API_TIMEOUT"
+	// #nosec G101 - This is an env var name, not a credential
+	accessToken    = "CLOUDSCALE_ACCESS_TOKEN"
+	apiURL         = "CLOUDSCALE_API_URL"
+	apiTimeoutEnv  = "CLOUDSCALE_API_TIMEOUT"
 	DefaultTimeout = time.Duration(20) * time.Second
 )
 
@@ -55,7 +55,7 @@ func maskAccessToken(token string) string {
 
 // apiTimeout returns the configured timeout or the default one.
 func apiTimeout() time.Duration {
-	if seconds, _ := strconv.Atoi(os.Getenv(ApiTimeout)); seconds > 0 {
+	if seconds, _ := strconv.Atoi(os.Getenv(apiTimeoutEnv)); seconds > 0 {
 		return time.Duration(seconds) * time.Second
 	}
 
@@ -68,9 +68,9 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 		klog.Warning("--cloud-config received but ignored")
 	}
 
-	var token = os.Getenv(AccessToken)
+	var token = os.Getenv(accessToken)
 	if len(token) == 0 {
-		return nil, fmt.Errorf("no %s configured", AccessToken)
+		return nil, fmt.Errorf("no %s configured", accessToken)
 	}
 
 	client := newCloudscaleClient(token, apiTimeout())
@@ -89,7 +89,6 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 // newCloudscaleClient spawns a new cloudscale API client.
 func newCloudscaleClient(
 	token string, timeout time.Duration) *cloudscale.Client {
-
 	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{
 		AccessToken: token,
 	})
@@ -99,8 +98,8 @@ func newCloudscaleClient(
 
 	klog.InfoS(
 		"cloudscale API client",
-		"url", os.Getenv(ApiUrl),
-		"token", maskAccessToken(os.Getenv(AccessToken)),
+		"url", os.Getenv(apiURL),
+		"token", maskAccessToken(os.Getenv(accessToken)),
 		"timeout", timeout,
 	)
 
@@ -114,7 +113,6 @@ func newCloudscaleClient(
 func (c *cloud) Initialize(
 	clientBuilder cloudprovider.ControllerClientBuilder,
 	stop <-chan struct{}) {
-
 	// This cannot be configured earlier, even though it seems better situated
 	// in newCloudscaleClient
 	c.loadbalancer.k8s = clientBuilder.ClientOrDie(

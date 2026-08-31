@@ -3,10 +3,11 @@ package cloudscale_ccm
 import (
 	"testing"
 
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
-	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
 )
 
 func TestInstanceExists(t *testing.T) {
@@ -100,27 +101,25 @@ func TestInstanceMetadata(t *testing.T) {
 		{
 			UUID: "cdc81195-f37e-46b6-827b-2aa824cfbc82",
 			Name: "worker-1",
-			Flavor: cloudscale.Flavor{
+			Flavor: cloudscale.FlavorStub{
 				Slug: "flex-4-2",
 			},
-			Interfaces: []cloudscale.Interface{
+			Interfaces: []cloudscale.ServerInterface{
 				{
 					Type: "public",
-					Addresses: []cloudscale.Address{
+					Addresses: []cloudscale.ServerAddress{
 						{Address: "5.102.144.1"},
 						{Address: "2a06:c01:bb::1"},
 					},
 				},
 				{
 					Type: "private",
-					Addresses: []cloudscale.Address{
+					Addresses: []cloudscale.ServerAddress{
 						{Address: "10.0.0.1"},
 					},
 				},
 			},
-			ZonalResource: cloudscale.ZonalResource{
-				Zone: cloudscale.Zone{Slug: "rma1"},
-			},
+			Zone: cloudscale.ZoneStub{Slug: "rma1"},
 		},
 	})
 	server.Start()

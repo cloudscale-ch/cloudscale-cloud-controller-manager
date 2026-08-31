@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -381,12 +381,12 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	// Ensure that we get responses from two different pods (round-robin)
 	s.T().Log("Verifying hostname service responses")
 	responses := make(map[string]int)
-	errors := 0
+	errs := 0
 	for i := 0; i < 100; i++ {
-		response, err := testkit.HelloNginx(addr, 80)
+		response, err := testkit.HelloNginx(s.T().Context(), addr, 80)
 		if err != nil {
 			s.T().Logf("Request %d failed: %s", i, err)
-			errors++
+			errs++
 		}
 
 		if response != nil {
@@ -400,7 +400,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	// Allow for one error, which occurs maybe once in the first 100 requests
 	// to a service, and which does not occur anymore later (even when
 	// running for a long time).
-	s.Assert().LessOrEqual(errors, 1)
+	s.Assert().LessOrEqual(errs, 1)
 	s.Assert().Len(responses, 2)
 
 	// In this simple case we expect no errors nor warnings
@@ -509,7 +509,7 @@ func (s *IntegrationTestSuite) verifyLBAvailability(name string, start time.Time
 	pollTimeout := 10 * time.Second
 
 	err := wait.PollUntilContextTimeout(s.T().Context(), pollInterval, pollTimeout, true, func(ctx context.Context) (bool, error) {
-		response, err := testkit.HelloNginx(addr, 80)
+		response, err := testkit.HelloNginx(ctx, addr, 80)
 
 		if reachable {
 			if err != nil {
@@ -883,7 +883,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 		for i := 0; i < timeout; i++ {
 			time.Sleep(1 * time.Second)
 
-			peer, err := testkit.HTTPRead(url)
+			peer, err := testkit.HTTPRead(s.T().Context(), url)
 			if err != nil {
 				continue
 			}
@@ -921,7 +921,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 		url := fmt.Sprintf("http://%s", addr)
 		for i := 0; i < 60; i++ {
 			before := time.Now()
-			_, err := testkit.HTTPRead(url)
+			_, err := testkit.HTTPRead(s.T().Context(), url)
 			after := time.Now()
 
 			// Bad requests take around 5s as they hit a timeout
@@ -1016,7 +1016,7 @@ func (s *IntegrationTestSuite) RunTestServiceWithFloatingIP(
 	bound := false
 
 	for i := 0; i < 100; i++ {
-		response, err := testkit.HelloNginx(addr, 80)
+		response, err := testkit.HelloNginx(s.T().Context(), addr, 80)
 
 		// The first 25 requests may err, as the Floating IP has to propagate
 		if err != nil && !bound {
@@ -1123,7 +1123,7 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 	errors := 0
 
 	for i := 0; i < 100; i++ {
-		_, err := testkit.HTTPRead(url)
+		_, err := testkit.HTTPRead(s.T().Context(), url)
 
 		if err == nil {
 			break
@@ -1138,7 +1138,7 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 	// Make sure our HTTP requests get wrapped in the PROXY protocol
 	s.T().Log("Testing PROXY protocol from outside")
 
-	used, err := testkit.HTTPRead(url)
+	used, err := testkit.HTTPRead(s.T().Context(), url)
 	s.Assert().NoError(err)
 	s.Assert().Equal("true\n", used)
 

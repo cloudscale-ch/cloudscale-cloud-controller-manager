@@ -10,11 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/actions"
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/compare"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/actions"
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/compare"
 )
 
 type lbState struct {
@@ -56,7 +57,6 @@ func desiredLbState(
 	nodes []*v1.Node,
 	servers []cloudscale.Server,
 ) (*lbState, error) {
-
 	// This would indicate a programming error somewhere
 	if len(nodes) != len(servers) {
 		return nil, errors.New("bad node to server mapping")
@@ -100,9 +100,7 @@ func desiredLbState(
 		Flavor: cloudscale.LoadBalancerFlavorStub{
 			Slug: serviceInfo.annotation(LoadBalancerFlavor),
 		},
-		ZonalResource: cloudscale.ZonalResource{
-			Zone: cloudscale.Zone{Slug: zone},
-		},
+		Zone: cloudscale.ZoneStub{Slug: zone},
 	})
 
 	// Get list of floating IPs if possible
@@ -118,7 +116,6 @@ func desiredLbState(
 	protocol := serviceInfo.annotation(LoadBalancerPoolProtocol)
 
 	for _, port := range serviceInfo.Service.Spec.Ports {
-
 		if port.Protocol != v1.ProtocolTCP && port.Protocol != v1.ProtocolUDP {
 			return nil, fmt.Errorf(
 				"service %s: cannot use %s for %d"+
@@ -164,7 +161,6 @@ func desiredLbState(
 
 		for _, server := range servers {
 			for _, iface := range server.Interfaces {
-
 				// There's currently no support to load balance "to public"
 				if iface.Type == "public" {
 					continue
@@ -172,7 +168,6 @@ func desiredLbState(
 
 				// Create a pool member for each address
 				for _, addr := range iface.Addresses {
-
 					// Networks without subnets are not supported
 					if addr.Subnet.UUID == "" {
 						continue
@@ -223,7 +218,6 @@ func actualLbState(
 	l *lbMapper,
 	serviceInfo *serviceInfo,
 ) (*lbState, error) {
-
 	// Get the loadbalancer
 	lb, err := l.findByServiceInfo(ctx, serviceInfo).AtMostOne()
 	if err != nil {
@@ -323,7 +317,6 @@ func actualLbState(
 // loadbalancer state is reached.
 func nextLbActions(
 	desired *lbState, actual *lbState) ([]actions.Action, error) {
-
 	next := make([]actions.Action, 0)
 
 	// Some state has to be given, even if empty
@@ -417,7 +410,6 @@ func nextLbActions(
 			desired.lb.VIPAddresses,
 			actual.lb.VIPAddresses,
 			func(d cloudscale.VIPAddress, a cloudscale.VIPAddress) bool {
-
 				// The desired address may be missing, the actual address
 				// is always given.
 				if d.Address != "" && d.Address != a.Address {
@@ -637,10 +629,10 @@ func nextLbActions(
 					))
 				}
 
-				if dm.HTTP.UrlPath != am.HTTP.UrlPath {
+				if dm.HTTP.URLPath != am.HTTP.URLPath {
 					next = append(next, actions.UpdateMonitorHTTPPath(
 						am.UUID,
-						dm.HTTP.UrlPath,
+						dm.HTTP.URLPath,
 					))
 				}
 
@@ -653,7 +645,6 @@ func nextLbActions(
 
 				if !slices.Equal(
 					dm.HTTP.ExpectedCodes, am.HTTP.ExpectedCodes) {
-
 					next = append(next, actions.UpdateMonitorHTTPExpectedCodes(
 						am.UUID,
 						dm.HTTP.ExpectedCodes,
@@ -721,7 +712,6 @@ func reconcileLbState(
 	desiredState func() (*lbState, error),
 	actualState func() (*lbState, error),
 ) error {
-
 	for {
 		// Get the states
 		desired, err := desiredState()
@@ -771,9 +761,7 @@ func runActions(
 	client *cloudscale.Client,
 	next []actions.Action,
 ) (bool, error) {
-
 	for _, action := range next {
-
 		// Abort the actions if the context has been cancelled, to avoid
 		// noop-ing a bunch of individual function calls.
 		if ctx.Err() != nil {
@@ -809,7 +797,6 @@ func listenerForPort(
 	serviceInfo *serviceInfo,
 	port v1.ServicePort,
 ) (*cloudscale.LoadBalancerListener, error) {
-
 	var (
 		listener = cloudscale.LoadBalancerListener{}
 		err      error
@@ -855,7 +842,6 @@ func listenerForPort(
 // given service, taking the annotations into consideration.
 func healthMonitorForPort(
 	serviceInfo *serviceInfo) (*cloudscale.LoadBalancerHealthMonitor, error) {
-
 	var (
 		monitor = cloudscale.LoadBalancerHealthMonitor{}
 		err     error
@@ -904,8 +890,8 @@ func healthMonitorForPort(
 			monitor.HTTP.Method = "GET"
 		}
 
-		if monitor.HTTP.UrlPath == "" {
-			monitor.HTTP.UrlPath = "/"
+		if monitor.HTTP.URLPath == "" {
+			monitor.HTTP.URLPath = "/"
 		}
 
 		if len(monitor.HTTP.ExpectedCodes) == 0 {
@@ -933,7 +919,7 @@ func healthMonitorForPort(
 			)
 		} else {
 			monitor.HTTP = &cloudscale.LoadBalancerHealthMonitorHTTP{
-				UrlPath:       "/livez",
+				URLPath:       "/livez",
 				Version:       "1.0",
 				Host:          nil,
 				Method:        "GET",
@@ -981,7 +967,6 @@ func poolName(protocol v1.Protocol, name string) string {
 // Warning: This named is used to compare desired members to actual members.
 // Any change to it causes members to be rebuilt, which must be avoided!
 func poolMemberName(address string, port int) string {
-
 	// Use canonical IPv6 formatting
 	if strings.Contains(address, ":") {
 		address = fmt.Sprintf("[%s]", address)

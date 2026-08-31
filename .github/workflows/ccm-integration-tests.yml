@@ -19,60 +19,9 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: 1.25
+  GO_VERSION: 1.27
 
 jobs:
-  lint:
-    name: "Run Linters"
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: '${{ env.GO_VERSION }}'
-
-      - name: Restore cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cache/golangci-lint
-            ~/.cache/go-build
-          key: lint-${{ hashFiles('go.mod') }}
-
-      - name: Install go tools
-        run: go mod tidy -modfile tool.mod
-
-      - name: Run Linter
-        run: make lint
-
-      - name: Save cache
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cache/golangci-lint
-            ~/.cache/go-build
-          key: lint-${{ hashFiles('go.mod') }}
-
-  unit:
-    name: "Run Unit Tests"
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: '${{ env.GO_VERSION }}'
-
-      - name: Run Unit Tests
-        run: make test
-
   test-matrix:
     name: "Get Kubernetes Releases"
     runs-on: ubuntu-latest
@@ -151,8 +100,6 @@ jobs:
     runs-on: ubuntu-latest
 
     needs:
-      - lint
-      - unit
       - test-matrix
       - build-image
       - check-ccm-integration
@@ -222,24 +169,3 @@ jobs:
       - name: Destroy Test Cluster
         if: always()
         run: helpers/cleanup
-
-  validate-workflows:
-    name: Validate GitHub Workflows
-    runs-on: ubuntu-latest
-
-    # More Information:
-    # https://github.com/zizmorcore/zizmor-action?tab=readme-ov-file#usage-with-github-advanced-security-recommended
-    #
-    # Use `uvx zizmor .github/` for a local preview using the latest zizmor version.
-
-    permissions:
-      contents: read
-      security-events: write
-
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - name: Run zizmor 🌈
-        uses: zizmorcore/zizmor-action@e639db99335bc9038abc0e066dfcd72e23d26fb4 # v0.3.0

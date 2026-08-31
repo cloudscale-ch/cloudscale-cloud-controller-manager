@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 )
 
 // MockAPIServer is a mock http server that builds on httptest.Server and
@@ -74,7 +74,7 @@ func (m *MockAPIServer) On(pattern string, status int, data any) {
 		}
 
 		// Capture JSON that was sent for PUT/POST
-		if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" {
+		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
 			data, err := io.ReadAll(r.Body)
 			if err != nil {
 				panic(fmt.Sprintf("failed read request %s: %s", pattern, err))
