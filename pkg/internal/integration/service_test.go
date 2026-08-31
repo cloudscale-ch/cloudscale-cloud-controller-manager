@@ -735,6 +735,11 @@ func (s *IntegrationTestSuite) TestServiceEndToEndDualProtocol() {
 	s.Require().Len(svc.Status.LoadBalancer.Ingress, 2)
 	addr := svc.Status.LoadBalancer.Ingress[0].IP
 
+	// We have to wait a few seconds until the configured health monitor reports the services as up.
+	// Sleeping 9 seconds allows for at least 3 successful up probes,
+	// which is one more than required.
+	time.Sleep(3 * 3 * time.Second)
+
 	// Create custom resolver pointing to the DNS service
 	resolver := &net.Resolver{
 		PreferGo: true,
