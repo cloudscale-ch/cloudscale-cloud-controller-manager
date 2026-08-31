@@ -7,10 +7,12 @@ set -euo pipefail
 
 export ANSIBLE_CONFIG="$PWD"/k8test/ansible.cfg
 export KUBERNETES="${KUBERNETES-latest}"
-export CLUSTER_PREFIX="${CLUSTER_PREFIX-k8test}"
+export CLUSTER_PREFIX="${CLUSTER_PREFIX-ccm}"
 export SUBNET="${SUBNET-10.100.1.0/24}"
+export CONTROL_COUNT="${CONTROL_COUNT-3}"
+export WORKER_COUNT="${WORKER_COUNT-2}"
 export LATEST="quay.io/cloudscalech/cloudscale-cloud-controller-manager:latest"
-export IMAGE="${IMAGE-quay.io/cloudscalech/cloudscale-cloud-controller-manager:test}"
+export IMAGE="${IMAGE-quay.io/cloudscalech/cloudscale-cloud-controller-manager:v0.0.0-test}"
 
 # Prepares k8test with an existing virtual env, or a newly created on
 function ensure-k8test() {
@@ -76,14 +78,14 @@ function ensure-cluster() {
   fi
 
   if ! test -f k8test/cluster/admin.conf; then
-    zone="$(random-zone)"
+    zone="${CLOUDSCALE_ZONE:-$(random-zone)}"
 
     # First create the cluster, without configuring the network
     k8test/playbooks/create-cluster.yml \
       -e zone="$zone" \
       -e ssh_key=k8test/cluster/ssh.pub \
-      -e control_count=2 \
-      -e worker_count=2 \
+      -e control_count="${CONTROL_COUNT}" \
+      -e worker_count="${WORKER_COUNT}" \
       -e kubelet_extra_args='--cloud-provider=external' \
       -e kubernetes="${KUBERNETES}" \
       -e cluster_prefix="${CLUSTER_PREFIX}" \
@@ -102,8 +104,8 @@ function ensure-cluster() {
     k8test/playbooks/create-cluster.yml \
       -e zone="$zone" \
       -e ssh_key=k8test/cluster/ssh.pub \
-      -e control_count=2 \
-      -e worker_count=2 \
+      -e control_count="${CONTROL_COUNT}" \
+      -e worker_count="${WORKER_COUNT}" \
       -e kubelet_extra_args='--cloud-provider=external' \
       -e kubernetes="${KUBERNETES}" \
       -e cluster_prefix="${CLUSTER_PREFIX}" \
@@ -117,7 +119,7 @@ function build-image() {
     -i k8test/cluster/inventory.yml \
     -e dockerfile=./Dockerfile \
     -e tag="$IMAGE" \
-    -e extra='--build-arg=VERSION=test' \
+    -e extra='--build-arg=VERSION=v0.0.0-test' \
     -l controls
 }
 
@@ -157,6 +159,65 @@ function update-ccm() {
   apply-resources
 }
 
+# List CCM-related container images on all cluster nodes using ansible ad-hoc
+function list-ccm-images() {
+  echo "=== CCM Images on All Nodes ==="
+  ansible -i k8test/cluster/inventory.yml nodes -b \
+    -m shell \
+    -a "ctr -n k8s.io images ls" \
+    --timeout=30
+  echo ""
+}
+
+# Run a diagnostic command without allowing a failure to hide subsequent output.
+function run-debug-command() {
+  if ! "$@"; then
+    echo "  (Diagnostic command failed: $*)"
+  fi
+}
+
+# Debug a failed rollout
+function debug-rollout-failure() {
+  local ccm_selector
+
+  echo ""
+  echo "❌ CCM rollout failed"
+  echo ""
+
+  echo "=== Node Scheduling Summary ==="
+  run-debug-command kubectl get nodes -o wide
+  run-debug-command kubectl get nodes \
+    -o custom-columns='NAME:.metadata.name,READY:.status.conditions[?(@.type=="Ready")].status,UNSCHEDULABLE:.spec.unschedulable,ROLES:.metadata.labels.node-role\.kubernetes\.io/control-plane,TAINTS:.spec.taints'
+  echo ""
+
+  echo "=== Recent Cluster Events ==="
+  run-debug-command kubectl get events --all-namespaces --sort-by=.metadata.creationTimestamp
+  echo ""
+
+  echo "=== cloudscale CCM Status ==="
+  run-debug-command kubectl -n kube-system get daemonset cloudscale-cloud-controller-manager -o wide
+  run-debug-command kubectl -n kube-system describe daemonset cloudscale-cloud-controller-manager
+  run-debug-command kubectl -n kube-system get pods -o wide
+  echo ""
+
+  echo "=== cloudscale CCM Logs ==="
+  if ccm_selector=$(kubectl -n kube-system get daemonset cloudscale-cloud-controller-manager -o json | \
+    jq -r '.spec.selector.matchLabels | to_entries | map("\(.key)=\(.value)") | join(",")') && [[ -n "$ccm_selector" ]]; then
+    run-debug-command kubectl -n kube-system logs -l "$ccm_selector" \
+      --all-containers=true --prefix=true --tail=-1 --max-log-requests=20
+    echo ""
+    echo "=== cloudscale CCM Previous Logs (if available) ==="
+    run-debug-command kubectl -n kube-system logs -l "$ccm_selector" \
+      --all-containers=true --prefix=true --previous --tail=-1 --max-log-requests=20
+  else
+    echo "  (Failed to determine the cloudscale CCM pod selector)"
+  fi
+  echo ""
+
+  echo "=== CSI Images on All Nodes ==="
+  run-debug-command list-ccm-images
+}
+
 # Re-apply the resources each time
 function apply-resources() {
   api_url=$(echo "${CLOUDSCALE_API_URL-https://api.cloudscale.ch}" | sed 's|/v1||g')
@@ -175,6 +236,12 @@ function apply-resources() {
   export KUBECONFIG=k8test/cluster/admin.conf
   kubectl delete -f /tmp/ccm.yml --ignore-not-found=true
   kubectl apply -f /tmp/ccm.yml
+
+  echo "Waiting for CCM to be ready..."
+  if ! kubectl -n kube-system rollout status daemonset/cloudscale-cloud-controller-manager --timeout=120s; then
+    debug-rollout-failure
+    exit 1
+  fi
 }
 
 # Execute if not sourced
