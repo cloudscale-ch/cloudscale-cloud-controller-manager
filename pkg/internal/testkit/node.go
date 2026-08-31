@@ -2,7 +2,6 @@ package testkit
 
 import (
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Node helps construct Kubernetes v1.Node objects for testing.
@@ -17,7 +16,7 @@ func NewNode(name string) *Node {
 
 func (n *Node) V1() *v1.Node {
 	return &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: n.Name},
+		Name: n.Name,
 		Spec: v1.NodeSpec{
 			ProviderID: n.ProviderID,
 		},

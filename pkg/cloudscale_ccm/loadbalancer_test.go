@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -38,7 +38,7 @@ func TestLoadBalancer_EnsureLoadBalancer(t *testing.T) {
 				LoadBalancerNodeSelector: "invalid===syntax",
 			},
 			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}},
+				{Name: "node-1"},
 			},
 			setup:      func(apiServer *testkit.MockAPIServer) {},
 			wantErr:    true,
@@ -53,8 +53,8 @@ func TestLoadBalancer_EnsureLoadBalancer(t *testing.T) {
 				LoadBalancerZone:         "rma1",
 			},
 			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-1", Labels: map[string]string{"env": "prod"}}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-2", Labels: map[string]string{"env": "staging"}}},
+				{Name: "node-1", Labels: map[string]string{"env": "prod"}},
+				{Name: "node-2", Labels: map[string]string{"env": "staging"}},
 			},
 			setup: func(apiServer *testkit.MockAPIServer) {
 				lbUUID := "00000000-0000-0000-0000-000000000001"
@@ -67,9 +67,7 @@ func TestLoadBalancer_EnsureLoadBalancer(t *testing.T) {
 					UUID:   lbUUID,
 					Name:   "test-lb",
 					Status: "running",
-					ZonalResource: cloudscale.ZonalResource{
-						Zone: cloudscale.Zone{Slug: "rma1"},
-					},
+					Zone:   cloudscale.ZoneStub{Slug: "rma1"},
 					Flavor: cloudscale.LoadBalancerFlavorStub{Slug: "lb-standard"},
 				}})
 				apiServer.On("/v1/load-balancers/pools", 200, []cloudscale.LoadBalancerPool{{
@@ -144,12 +142,10 @@ func TestLoadBalancer_EnsureLoadBalancer(t *testing.T) {
 			}
 
 			service := &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-service",
-					Namespace:   "default",
-					UID:         "test-uid",
-					Annotations: tt.annotations,
-				},
+				Name:        "test-service",
+				Namespace:   "default",
+				UID:         "test-uid",
+				Annotations: tt.annotations,
 				Spec: v1.ServiceSpec{
 					Type: v1.ServiceTypeLoadBalancer,
 					Ports: []v1.ServicePort{
@@ -207,9 +203,7 @@ func TestLoadBalancer_ConcurrentCreate(t *testing.T) {
 				UUID:   "lb-uuid-1",
 				Name:   "k8s-service-test-uid",
 				Status: "running",
-				ZonalResource: cloudscale.ZonalResource{
-					Zone: cloudscale.Zone{Slug: "rma1"},
-				},
+				Zone:   cloudscale.ZoneStub{Slug: "rma1"},
 				Flavor: cloudscale.LoadBalancerFlavorStub{Slug: "lb-standard"},
 			}
 			lbs = append(lbs, lb)
@@ -230,12 +224,10 @@ func TestLoadBalancer_ConcurrentCreate(t *testing.T) {
 	apiServer.WithServers([]cloudscale.Server{{
 		UUID: serverUUID,
 		Name: "node-1",
-		ZonalResource: cloudscale.ZonalResource{
-			Zone: cloudscale.Zone{Slug: "rma1"},
-		},
-		Interfaces: []cloudscale.Interface{{
+		Zone: cloudscale.ZoneStub{Slug: "rma1"},
+		Interfaces: []cloudscale.ServerInterface{{
 			Type: "private",
-			Addresses: []cloudscale.Address{{
+			Addresses: []cloudscale.ServerAddress{{
 				Address: "10.0.0.1",
 				Subnet:  cloudscale.SubnetStub{UUID: "subnet-uuid-1"},
 			}},
@@ -267,15 +259,13 @@ func TestLoadBalancer_ConcurrentCreate(t *testing.T) {
 	}
 
 	service := &v1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-service",
-			Namespace: "default",
-			UID:       "test-uid",
-			Annotations: map[string]string{
-				LoadBalancerName:   "k8s-service-test-uid",
-				LoadBalancerFlavor: "lb-standard",
-				LoadBalancerZone:   "rma1",
-			},
+		Name:      "test-service",
+		Namespace: "default",
+		UID:       "test-uid",
+		Annotations: map[string]string{
+			LoadBalancerName:   "k8s-service-test-uid",
+			LoadBalancerFlavor: "lb-standard",
+			LoadBalancerZone:   "rma1",
 		},
 		Spec: v1.ServiceSpec{
 			Type: v1.ServiceTypeLoadBalancer,
@@ -288,8 +278,8 @@ func TestLoadBalancer_ConcurrentCreate(t *testing.T) {
 	_, _ = l.k8s.CoreV1().Services("default").Create(t.Context(), service, metav1.CreateOptions{})
 
 	nodes := []*v1.Node{{
-		ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
-		Spec:       v1.NodeSpec{ProviderID: "cloudscale://" + serverUUID},
+		Name: "node-1",
+		Spec: v1.NodeSpec{ProviderID: "cloudscale://" + serverUUID},
 	}}
 
 	var wg sync.WaitGroup
@@ -323,9 +313,9 @@ func TestFilterNodesBySelector(t *testing.T) {
 				LoadBalancerNodeSelector: "env=prod",
 			},
 			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-1", Labels: map[string]string{"env": "prod"}}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-2", Labels: map[string]string{"env": "staging"}}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-3", Labels: map[string]string{"env": "prod"}}},
+				{Name: "node-1", Labels: map[string]string{"env": "prod"}},
+				{Name: "node-2", Labels: map[string]string{"env": "staging"}},
+				{Name: "node-3", Labels: map[string]string{"env": "prod"}},
 			},
 			wantNames: []string{"node-1", "node-3"},
 			wantErr:   false,
@@ -336,7 +326,7 @@ func TestFilterNodesBySelector(t *testing.T) {
 				LoadBalancerNodeSelector: "invalid===syntax",
 			},
 			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}},
+				{Name: "node-1"},
 			},
 			wantNames: nil,
 			wantErr:   true,
@@ -345,8 +335,8 @@ func TestFilterNodesBySelector(t *testing.T) {
 			name:        "no annotation returns all nodes",
 			annotations: nil,
 			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-1"}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-2"}},
+				{Name: "node-1"},
+				{Name: "node-2"},
 			},
 			wantNames: []string{"node-1", "node-2"},
 			wantErr:   false,
@@ -357,8 +347,8 @@ func TestFilterNodesBySelector(t *testing.T) {
 				LoadBalancerNodeSelector: "nonexistent=value",
 			},
 			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-1", Labels: map[string]string{"env": "prod"}}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-2", Labels: map[string]string{"env": "staging"}}},
+				{Name: "node-1", Labels: map[string]string{"env": "prod"}},
+				{Name: "node-2", Labels: map[string]string{"env": "staging"}},
 			},
 			wantNames: []string{},
 			wantErr:   false,
@@ -369,9 +359,9 @@ func TestFilterNodesBySelector(t *testing.T) {
 				LoadBalancerNodeSelector: "env=prod,tier=frontend",
 			},
 			nodes: []*v1.Node{
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-1", Labels: map[string]string{"env": "prod", "tier": "frontend"}}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-2", Labels: map[string]string{"env": "prod", "tier": "backend"}}},
-				{ObjectMeta: metav1.ObjectMeta{Name: "node-3", Labels: map[string]string{"env": "staging", "tier": "frontend"}}},
+				{Name: "node-1", Labels: map[string]string{"env": "prod", "tier": "frontend"}},
+				{Name: "node-2", Labels: map[string]string{"env": "prod", "tier": "backend"}},
+				{Name: "node-3", Labels: map[string]string{"env": "staging", "tier": "frontend"}},
 			},
 			wantNames: []string{"node-1"},
 			wantErr:   false,
@@ -383,10 +373,8 @@ func TestFilterNodesBySelector(t *testing.T) {
 			t.Parallel()
 
 			service := &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test-service",
-					Annotations: tt.annotations,
-				},
+				Name:        "test-service",
+				Annotations: tt.annotations,
 			}
 			info := newServiceInfo(service, "test-cluster")
 

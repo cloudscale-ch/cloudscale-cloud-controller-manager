@@ -4,3 +4,4 @@ k8test
 bin/
 image.tar
 venv/
+_artifacts/

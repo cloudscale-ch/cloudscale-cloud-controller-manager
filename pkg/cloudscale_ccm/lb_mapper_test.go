@@ -3,9 +3,10 @@ package cloudscale_ccm
 import (
 	"testing"
 
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
 )
 
 func TestFindLoadBalancer(t *testing.T) {
