@@ -403,49 +403,9 @@ func nextLbActions(
 		return next, nil
 	}
 
-	// If the lb requires other changes, inform the user that they need to
-	// recreate the service themselves.
-	if len(desired.lb.VIPAddresses) > 0 {
-		equal := slices.EqualFunc(
-			desired.lb.VIPAddresses,
-			actual.lb.VIPAddresses,
-			func(d cloudscale.VIPAddress, a cloudscale.VIPAddress) bool {
-				// The desired address may be missing, the actual address
-				// is always given.
-				if d.Address != "" && d.Address != a.Address {
-					return false
-				}
-
-				if d.Subnet.UUID != a.Subnet.UUID {
-					return false
-				}
-
-				return true
-			},
-		)
-
-		if !equal {
-			return nil, fmt.Errorf(
-				"VIP addresses for %s changed, please re-create the service",
-				actual.lb.HREF,
-			)
-		}
-	}
-
-	if desired.lb.Flavor.Slug != actual.lb.Flavor.Slug {
-		return nil, fmt.Errorf(
-			"flavor for %s changed, please configure the previous flavor "+
-				"or contact support",
-			actual.lb.HREF,
-		)
-	}
-
-	if desired.lb.Zone.Slug != actual.lb.Zone.Slug {
-		return nil, fmt.Errorf(
-			"zone for %s changed, please configure the previous zone "+
-				"or contact support",
-			actual.lb.HREF,
-		)
+	// Validate immutable LB properties
+	if err := validateLbChanges(desired, actual); err != nil {
+		return nil, err
 	}
 
 	// If the name of the lb is wrong, change it
@@ -576,39 +536,8 @@ func nextLbActions(
 		)
 
 		for _, match := range listeners {
-			dl := match[0]
-			al := match[1]
-
-			if !slices.Equal(dl.AllowedCIDRs, al.AllowedCIDRs) {
-				next = append(next, actions.UpdateListenerAllowedCIDRs(
-					al.UUID,
-					dl.AllowedCIDRs,
-				))
-			}
-
-			if dl.TimeoutClientDataMS != al.TimeoutClientDataMS {
-				next = append(next, actions.UpdateListenerTimeout(
-					al.UUID,
-					dl.TimeoutClientDataMS,
-					"client-data-ms",
-				))
-			}
-
-			if dl.TimeoutMemberConnectMS != al.TimeoutMemberConnectMS {
-				next = append(next, actions.UpdateListenerTimeout(
-					al.UUID,
-					dl.TimeoutMemberConnectMS,
-					"member-connect-ms",
-				))
-			}
-
-			if dl.TimeoutMemberDataMS != al.TimeoutMemberDataMS {
-				next = append(next, actions.UpdateListenerTimeout(
-					al.UUID,
-					dl.TimeoutMemberDataMS,
-					"member-data-ms",
-				))
-			}
+			next = append(next,
+				listenerUpdateActions(match[0], match[1])...)
 		}
 
 		monitors := compare.Match(
@@ -618,71 +547,8 @@ func nextLbActions(
 		)
 
 		for _, match := range monitors {
-			dm := match[0]
-			am := match[1]
-
-			if dm.HTTP != nil && am.HTTP != nil {
-				if dm.HTTP.Host != am.HTTP.Host {
-					next = append(next, actions.UpdateMonitorHTTPHost(
-						am.UUID,
-						dm.HTTP.Host,
-					))
-				}
-
-				if dm.HTTP.URLPath != am.HTTP.URLPath {
-					next = append(next, actions.UpdateMonitorHTTPPath(
-						am.UUID,
-						dm.HTTP.URLPath,
-					))
-				}
-
-				if dm.HTTP.Method != am.HTTP.Method {
-					next = append(next, actions.UpdateMonitorHTTPMethod(
-						am.UUID,
-						dm.HTTP.Method,
-					))
-				}
-
-				if !slices.Equal(
-					dm.HTTP.ExpectedCodes, am.HTTP.ExpectedCodes) {
-					next = append(next, actions.UpdateMonitorHTTPExpectedCodes(
-						am.UUID,
-						dm.HTTP.ExpectedCodes,
-					))
-				}
-			}
-
-			if dm.DelayS != am.DelayS {
-				next = append(next, actions.UpdateMonitorNumber(
-					am.UUID,
-					dm.DelayS,
-					"delay-s",
-				))
-			}
-
-			if dm.TimeoutS != am.TimeoutS {
-				next = append(next, actions.UpdateMonitorNumber(
-					am.UUID,
-					dm.TimeoutS,
-					"timeout-s",
-				))
-			}
-
-			if dm.UpThreshold != am.UpThreshold {
-				next = append(next, actions.UpdateMonitorNumber(
-					am.UUID,
-					dm.UpThreshold,
-					"up-threshold",
-				))
-			}
-
-			if dm.DownThreshold != am.DownThreshold {
-				next = append(next, actions.UpdateMonitorNumber(
-					am.UUID,
-					dm.DownThreshold,
-					"down-threshold",
-				))
-			}
+			next = append(next,
+				monitorUpdateActions(match[0], match[1])...)
 		}
 	}
 
@@ -701,6 +567,217 @@ func nextLbActions(
 	}
 
 	return next, nil
+}
+
+// updateIfChanged generates an action if comparable values differ
+func updateIfChanged[T comparable](
+	desired, actual T,
+	makeAction func() actions.Action,
+) []actions.Action {
+	if desired != actual {
+		return []actions.Action{makeAction()}
+	}
+	return nil
+}
+
+// updateSliceIfChanged generates an action if slices differ
+func updateSliceIfChanged[T comparable](
+	desired, actual []T,
+	makeAction func() actions.Action,
+) []actions.Action {
+	if !slices.Equal(desired, actual) {
+		return []actions.Action{makeAction()}
+	}
+	return nil
+}
+
+// updatePtrStringIfChanged generates an action if *string values differ
+func updatePtrStringIfChanged(
+	desired, actual *string,
+	makeAction func() actions.Action,
+) []actions.Action {
+	if !ptrStringEqual(desired, actual) {
+		return []actions.Action{makeAction()}
+	}
+	return nil
+}
+
+// ptrStringEqual compares two *string values for equality
+func ptrStringEqual(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+// listenerUpdateActions generates update actions for listener property differences
+func listenerUpdateActions(
+	desired, actual cloudscale.LoadBalancerListener,
+) []actions.Action {
+	var result []actions.Action
+
+	result = append(result, updateSliceIfChanged(
+		desired.AllowedCIDRs, actual.AllowedCIDRs,
+		func() actions.Action {
+			return actions.UpdateListenerAllowedCIDRs(
+				actual.UUID, desired.AllowedCIDRs)
+		},
+	)...)
+
+	result = append(result, updateIfChanged(
+		desired.TimeoutClientDataMS, actual.TimeoutClientDataMS,
+		func() actions.Action {
+			return actions.UpdateListenerTimeout(
+				actual.UUID, desired.TimeoutClientDataMS, "client-data-ms")
+		},
+	)...)
+
+	result = append(result, updateIfChanged(
+		desired.TimeoutMemberConnectMS, actual.TimeoutMemberConnectMS,
+		func() actions.Action {
+			return actions.UpdateListenerTimeout(
+				actual.UUID, desired.TimeoutMemberConnectMS, "member-connect-ms")
+		},
+	)...)
+
+	result = append(result, updateIfChanged(
+		desired.TimeoutMemberDataMS, actual.TimeoutMemberDataMS,
+		func() actions.Action {
+			return actions.UpdateListenerTimeout(
+				actual.UUID, desired.TimeoutMemberDataMS, "member-data-ms")
+		},
+	)...)
+
+	return result
+}
+
+// monitorUpdateActions generates update actions for monitor property differences
+func monitorUpdateActions(
+	desired, actual cloudscale.LoadBalancerHealthMonitor,
+) []actions.Action {
+	var result []actions.Action
+
+	// HTTP properties (only if both have HTTP config)
+	if desired.HTTP != nil && actual.HTTP != nil {
+		result = append(result, updatePtrStringIfChanged(
+			desired.HTTP.Host, actual.HTTP.Host,
+			func() actions.Action {
+				return actions.UpdateMonitorHTTPHost(
+					actual.UUID, desired.HTTP.Host)
+			},
+		)...)
+
+		result = append(result, updateIfChanged(
+			desired.HTTP.URLPath, actual.HTTP.URLPath,
+			func() actions.Action {
+				return actions.UpdateMonitorHTTPPath(
+					actual.UUID, desired.HTTP.URLPath)
+			},
+		)...)
+
+		result = append(result, updateIfChanged(
+			desired.HTTP.Method, actual.HTTP.Method,
+			func() actions.Action {
+				return actions.UpdateMonitorHTTPMethod(
+					actual.UUID, desired.HTTP.Method)
+			},
+		)...)
+
+		result = append(result, updateSliceIfChanged(
+			desired.HTTP.ExpectedCodes, actual.HTTP.ExpectedCodes,
+			func() actions.Action {
+				return actions.UpdateMonitorHTTPExpectedCodes(
+					actual.UUID, desired.HTTP.ExpectedCodes)
+			},
+		)...)
+	}
+
+	// Numeric properties
+	result = append(result, updateIfChanged(
+		desired.DelayS, actual.DelayS,
+		func() actions.Action {
+			return actions.UpdateMonitorNumber(
+				actual.UUID, desired.DelayS, "delay-s")
+		},
+	)...)
+
+	result = append(result, updateIfChanged(
+		desired.TimeoutS, actual.TimeoutS,
+		func() actions.Action {
+			return actions.UpdateMonitorNumber(
+				actual.UUID, desired.TimeoutS, "timeout-s")
+		},
+	)...)
+
+	result = append(result, updateIfChanged(
+		desired.UpThreshold, actual.UpThreshold,
+		func() actions.Action {
+			return actions.UpdateMonitorNumber(
+				actual.UUID, desired.UpThreshold, "up-threshold")
+		},
+	)...)
+
+	result = append(result, updateIfChanged(
+		desired.DownThreshold, actual.DownThreshold,
+		func() actions.Action {
+			return actions.UpdateMonitorNumber(
+				actual.UUID, desired.DownThreshold, "down-threshold")
+		},
+	)...)
+
+	return result
+}
+
+// validateLbChanges validates immutable LB properties and returns an error if
+// incompatible changes are detected.
+func validateLbChanges(desired, actual *lbState) error {
+	if len(desired.lb.VIPAddresses) > 0 {
+		equal := slices.EqualFunc(
+			desired.lb.VIPAddresses,
+			actual.lb.VIPAddresses,
+			func(d cloudscale.VIPAddress, a cloudscale.VIPAddress) bool {
+				// The desired address may be missing, the actual address
+				// is always given.
+				if d.Address != "" && d.Address != a.Address {
+					return false
+				}
+
+				if d.Subnet.UUID != a.Subnet.UUID {
+					return false
+				}
+
+				return true
+			},
+		)
+
+		if !equal {
+			return fmt.Errorf(
+				"VIP addresses for %s changed, please re-create the service",
+				actual.lb.HREF,
+			)
+		}
+	}
+
+	if desired.lb.Flavor.Slug != actual.lb.Flavor.Slug {
+		return fmt.Errorf(
+			"flavor for %s changed, please configure the previous flavor "+
+				"or contact support",
+			actual.lb.HREF,
+		)
+	}
+
+	if desired.lb.Zone.Slug != actual.lb.Zone.Slug {
+		return fmt.Errorf(
+			"zone for %s changed, please configure the previous zone "+
+				"or contact support",
+			actual.lb.HREF,
+		)
+	}
+
+	return nil
 }
 
 // reconcileLbState reconciles an actual load balancer state with a desired
