@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/oauth2"
 	v1 "k8s.io/api/core/v1"
@@ -22,6 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/cloudscale_ccm"
 )
 
 func TestIntegration(t *testing.T) {
@@ -78,10 +80,16 @@ func (s *IntegrationTestSuite) SetupSuite() {
 		AccessToken: token,
 	})
 
-	httpClient := oauth2.NewClient(context.Background(), tokenSource)
+	httpClient := &http.Client{
+		Transport: &oauth2.Transport{
+			Source: tokenSource,
+			Base:   cloudscale_ccm.NewTransport(),
+		},
+	}
 	httpClient.Timeout = 10 * time.Second
 
 	s.api = cloudscale.NewClient(httpClient)
+	s.api.UserAgent = s.api.UserAgent + " ccm/integration"
 }
 
 func (s *IntegrationTestSuite) SetupTest() {
