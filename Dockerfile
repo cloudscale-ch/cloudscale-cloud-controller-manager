@@ -1,18 +1,28 @@
-FROM golang:1.25-alpine AS build
-ARG VERSION
+FROM golang:1.27.1 AS builder
 
-RUN apk add --no-cache git
+WORKDIR /src
 
-WORKDIR /host
-COPY . /host
+# Copy go.mod/go.sum first for better layer caching
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOCACHE=/var/cache/image \
-  go build -trimpath -ldflags "-s -w -X main.version=$VERSION" \
-  -o bin/cloudscale-cloud-controller-manager \
-  cmd/cloudscale-cloud-controller-manager/main.go
+COPY Makefile ./
+COPY pkg/ pkg/
+COPY cmd/ cmd/
+
+ARG VERSION=v0.0.0-dev
+ARG GIT_COMMIT
+ARG BUILD_DATE
+
+# Convert build args to environment variables for make
+ENV VERSION=${VERSION}
+ENV GIT_COMMIT=${GIT_COMMIT}
+ENV BUILD_DATE=${BUILD_DATE}
+
+RUN make build
 
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 
-COPY --from=build /host/bin/cloudscale-cloud-controller-manager /usr/local/bin/cloudscale-cloud-controller-manager
+COPY --from=builder /src/bin/cloudscale-cloud-controller-manager /usr/local/bin/cloudscale-cloud-controller-manager
 ENTRYPOINT ["cloudscale-cloud-controller-manager"]

@@ -3,10 +3,11 @@ package cloudscale_ccm
 import (
 	"testing"
 
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
-	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	cloudscale "github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
 )
 
 func TestServerByNode(t *testing.T) {

@@ -1,33 +1,35 @@
 package cloudscale_ccm
 
 import (
-	"context"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"golang.org/x/oauth2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/component-base/version"
 	"k8s.io/klog/v2"
 
 	cloudprovider "k8s.io/cloud-provider"
 )
 
 const (
-	// Under no circumstances can this string change. It is for eternity.
+	// ProviderName can not change under no circumstances. It is for eternity.
 	ProviderName = "cloudscale"
 
-	// #nosec G101
-	AccessToken    = "CLOUDSCALE_ACCESS_TOKEN"
-	ApiUrl         = "CLOUDSCALE_API_URL"
-	ApiTimeout     = "CLOUDSCALE_API_TIMEOUT"
+	// #nosec G101 - This is an env var name, not a credential
+	accessToken    = "CLOUDSCALE_ACCESS_TOKEN"
+	apiURL         = "CLOUDSCALE_API_URL"
+	apiTimeoutEnv  = "CLOUDSCALE_API_TIMEOUT"
 	DefaultTimeout = time.Duration(20) * time.Second
 )
 
@@ -55,7 +57,7 @@ func maskAccessToken(token string) string {
 
 // apiTimeout returns the configured timeout or the default one.
 func apiTimeout() time.Duration {
-	if seconds, _ := strconv.Atoi(os.Getenv(ApiTimeout)); seconds > 0 {
+	if seconds, _ := strconv.Atoi(os.Getenv(apiTimeoutEnv)); seconds > 0 {
 		return time.Duration(seconds) * time.Second
 	}
 
@@ -68,9 +70,9 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 		klog.Warning("--cloud-config received but ignored")
 	}
 
-	var token = os.Getenv(AccessToken)
+	var token = os.Getenv(accessToken)
 	if len(token) == 0 {
-		return nil, fmt.Errorf("no %s configured", AccessToken)
+		return nil, fmt.Errorf("no %s configured", accessToken)
 	}
 
 	client := newCloudscaleClient(token, apiTimeout())
@@ -86,25 +88,56 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 	}, nil
 }
 
-// newCloudscaleClient spawns a new cloudscale API client.
-func newCloudscaleClient(
-	token string, timeout time.Duration) *cloudscale.Client {
+// NewTransport creates an http.Transport configured for the cloudscale.ch API.
+// The returned transport should be created once and shared across all clients
+// to benefit from connection pooling and HTTP/2 multiplexing.
+func NewTransport() *http.Transport {
+	return &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   5 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
 
+		TLSHandshakeTimeout: 5 * time.Second,
+
+		// needs to be set because we also set DialContext
+		ForceAttemptHTTP2: true,
+		HTTP2: &http.HTTP2Config{
+			SendPingTimeout: 5 * time.Second,
+			PingTimeout:     3 * time.Second,
+		},
+
+		IdleConnTimeout:     90 * time.Second,
+		MaxIdleConns:        50,
+		MaxIdleConnsPerHost: 50,
+		MaxConnsPerHost:     0,
+	}
+}
+
+// newCloudscaleClient spawns a new cloudscale API client.
+func newCloudscaleClient(token string, timeout time.Duration) *cloudscale.Client {
 	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{
 		AccessToken: token,
 	})
 
-	httpClient := oauth2.NewClient(context.Background(), tokenSource)
+	httpClient := &http.Client{
+		Transport: &oauth2.Transport{
+			Source: tokenSource,
+			Base:   NewTransport(),
+		},
+	}
 	httpClient.Timeout = timeout
 
 	klog.InfoS(
 		"cloudscale API client",
-		"url", os.Getenv(ApiUrl),
-		"token", maskAccessToken(os.Getenv(AccessToken)),
+		"url", os.Getenv(apiURL),
+		"token", maskAccessToken(os.Getenv(accessToken)),
 		"timeout", timeout,
 	)
 
-	return cloudscale.NewClient(httpClient)
+	c := cloudscale.NewClient(httpClient)
+	c.UserAgent = c.UserAgent + " ccm/" + version.Get().GitVersion
+	return c
 }
 
 // Initialize provides the cloud with a kubernetes client builder and may spawn
@@ -114,7 +147,6 @@ func newCloudscaleClient(
 func (c *cloud) Initialize(
 	clientBuilder cloudprovider.ControllerClientBuilder,
 	stop <-chan struct{}) {
-
 	// This cannot be configured earlier, even though it seems better situated
 	// in newCloudscaleClient
 	c.loadbalancer.k8s = clientBuilder.ClientOrDie(

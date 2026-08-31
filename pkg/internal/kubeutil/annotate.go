@@ -78,14 +78,13 @@ func AnnotateService(
 	return PatchService(ctx, client, service, operations)
 }
 
-// PatchServices applies the given patch operations on the given service.
+// PatchService applies the given patch operations on the given service.
 func PatchService(
 	ctx context.Context,
 	client kubernetes.Interface,
 	service *v1.Service,
 	operations []map[string]any,
 ) error {
-
 	patch, err := json.Marshal(&operations)
 	if err != nil {
 		return fmt.Errorf("failed to encode patch operations: %w", err)
@@ -115,7 +114,6 @@ func PatchServiceExternalTrafficPolicy(
 	service *v1.Service,
 	policy v1.ServiceExternalTrafficPolicy,
 ) error {
-
 	if service.Spec.ExternalTrafficPolicy == policy {
 		return nil
 	}

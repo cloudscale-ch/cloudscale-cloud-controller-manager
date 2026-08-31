@@ -32,14 +32,14 @@ func TestNewCloudscaleProviderWithoutToken(t *testing.T) {
 }
 
 func TestNewCloudscaleProviderWithToken(t *testing.T) {
-	t.Setenv(AccessToken, "1234")
+	t.Setenv(accessToken, "1234")
 	if _, err := newCloudscaleProvider(nil); err != nil {
 		t.Error("newCloudscaleProvider should initialize with just a token")
 	}
 }
 
 func TestNewCloudscaleProviderWithBadConfig(t *testing.T) {
-	t.Setenv(AccessToken, "1234")
+	t.Setenv(accessToken, "1234")
 
 	cfg := iotest.ErrReader(errors.New("bad config"))
 	if _, err := newCloudscaleProvider(cfg); err != nil {
@@ -55,7 +55,7 @@ func TestDefaultTimeout(t *testing.T) {
 }
 
 func TestCustomTimeout(t *testing.T) {
-	t.Setenv(ApiTimeout, "5")
+	t.Setenv(apiTimeoutEnv, "5")
 	timeout := apiTimeout()
 	assert.Equal(t, timeout, 5*time.Second)
 }

@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
 )
 
 func TestRefetch(t *testing.T) {
@@ -347,7 +348,7 @@ func TestCreateHealthMonitorAction(t *testing.T) {
 			HTTP: &cloudscale.LoadBalancerHealthMonitorHTTP{
 				ExpectedCodes: []string{"200"},
 				Method:        "GET",
-				UrlPath:       "/livez",
+				URLPath:       "/livez",
 				Version:       "1.1",
 				Host:          &host,
 			},
@@ -371,7 +372,7 @@ func TestCreateHealthMonitorAction(t *testing.T) {
 	assert.Equal(t, "https", sent.Type)
 	assert.Equal(t, []string{"200"}, sent.HTTP.ExpectedCodes)
 	assert.Equal(t, "GET", sent.HTTP.Method)
-	assert.Equal(t, "/livez", sent.HTTP.UrlPath)
+	assert.Equal(t, "/livez", sent.HTTP.URLPath)
 	assert.Equal(t, "1.1", sent.HTTP.Version)
 	assert.Equal(t, "foo", *sent.HTTP.Host)
 }
@@ -449,7 +450,7 @@ func TestUpdateMonitorHTTPPath(t *testing.T) {
 	var sent cloudscale.LoadBalancerHealthMonitorRequest
 	server.LastSent(&sent)
 
-	assert.Equal(t, "/foo", sent.HTTP.UrlPath)
+	assert.Equal(t, "/foo", sent.HTTP.URLPath)
 }
 
 func TestUpdateMonitorHTTPExpectedCodes(t *testing.T) {

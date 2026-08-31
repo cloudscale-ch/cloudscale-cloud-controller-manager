@@ -20,7 +20,6 @@ type instances struct {
 // field to find the node in the cloud provider.
 func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 	bool, error) {
-
 	// When a node does not have a ProviderID, return an err. `InstanceExists`
 	// is used by the node lifecycle controller to decide if a `NotReady`
 	// node can be removed and names are too weak of an association to say for
@@ -62,7 +61,6 @@ func (i *instances) InstanceExists(ctx context.Context, node *v1.Node) (
 // node in the cloud provider.
 func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (
 	bool, error) {
-
 	if node.Spec.ProviderID == "" {
 		return false, fmt.Errorf("node %s has no ProviderID", node.Name)
 	}
@@ -91,7 +89,6 @@ func (i *instances) InstanceShutdown(ctx context.Context, node *v1.Node) (
 // other properties of the node like its name, labels and annotations.
 func (i *instances) InstanceMetadata(ctx context.Context, node *v1.Node) (
 	*cloudprovider.InstanceMetadata, error) {
-
 	server, err := i.srv.findByNode(ctx, node).One()
 
 	if err != nil {
