@@ -1,7 +1,11 @@
 package cloudscale_ccm
 
 import (
+	"encoding/json"
+	"net/http"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	"github.com/stretchr/testify/assert"
@@ -177,6 +181,130 @@ func TestLoadBalancer_EnsureLoadBalancer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadBalancer_ConcurrentCreate(t *testing.T) {
+	t.Parallel()
+
+	apiServer := testkit.NewMockAPIServer()
+
+	createCount := 0
+	var lbs []cloudscale.LoadBalancer
+	var mu sync.Mutex
+
+	// Custom handler for /v1/load-balancers to track creates.
+	// The sleep before appending to lbs increases the race window so that
+	// both goroutines can see an empty list before either creates.
+	apiServer.HandleFunc("/v1/load-balancers", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			time.Sleep(200 * time.Millisecond)
+
+			mu.Lock()
+			createCount++
+			lb := cloudscale.LoadBalancer{
+				HREF:   "/v1/load-balancers/lb-uuid-1",
+				UUID:   "lb-uuid-1",
+				Name:   "k8s-service-test-uid",
+				Status: "running",
+				ZonalResource: cloudscale.ZonalResource{
+					Zone: cloudscale.Zone{Slug: "rma1"},
+				},
+				Flavor: cloudscale.LoadBalancerFlavorStub{Slug: "lb-standard"},
+			}
+			lbs = append(lbs, lb)
+			mu.Unlock()
+
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(lb)
+		case http.MethodGet:
+			mu.Lock()
+			defer mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(lbs)
+		}
+	})
+
+	// Mock server endpoint for node mapping.
+	serverUUID := "08d56bfe-40d0-4c68-a915-54f846c28c9e"
+	apiServer.WithServers([]cloudscale.Server{{
+		UUID: serverUUID,
+		Name: "node-1",
+		ZonalResource: cloudscale.ZonalResource{
+			Zone: cloudscale.Zone{Slug: "rma1"},
+		},
+		Interfaces: []cloudscale.Interface{{
+			Type: "private",
+			Addresses: []cloudscale.Address{{
+				Address: "10.0.0.1",
+				Subnet:  cloudscale.SubnetStub{UUID: "subnet-uuid-1"},
+			}},
+		}},
+	}})
+
+	// Mock the remaining LB endpoints so reconciliation can proceed.
+	apiServer.On("/v1/load-balancers/pools", 200, []cloudscale.LoadBalancerPool{})
+	apiServer.On("/v1/load-balancers/listeners", 200, []cloudscale.LoadBalancerListener{})
+	apiServer.On("/v1/load-balancers/health-monitors", 200, []cloudscale.LoadBalancerHealthMonitor{})
+	apiServer.On("/v1/floating-ips", 200, []cloudscale.FloatingIP{})
+
+	apiServer.Start()
+	defer apiServer.Close()
+
+	client := fake.NewSimpleClientset()
+	fakeDiscovery, ok := client.Discovery().(*fakediscovery.FakeDiscovery)
+	require.True(t, ok, "couldn't convert Discovery() to *FakeDiscovery")
+	fakeDiscovery.FakedServerVersion = &version.Info{
+		Major: "1",
+		Minor: "34",
+	}
+
+	l := &loadbalancer{
+		lbs:      lbMapper{client: apiServer.Client()},
+		srv:      serverMapper{client: apiServer.Client()},
+		k8s:      client,
+		recorder: record.NewFakeRecorder(10),
+	}
+
+	service := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: "default",
+			UID:       "test-uid",
+			Annotations: map[string]string{
+				LoadBalancerName:   "k8s-service-test-uid",
+				LoadBalancerFlavor: "lb-standard",
+				LoadBalancerZone:   "rma1",
+			},
+		},
+		Spec: v1.ServiceSpec{
+			Type: v1.ServiceTypeLoadBalancer,
+			Ports: []v1.ServicePort{
+				{Protocol: v1.ProtocolTCP, Port: 80, NodePort: 80},
+			},
+		},
+	}
+
+	_, _ = l.k8s.CoreV1().Services("default").Create(t.Context(), service, metav1.CreateOptions{})
+
+	nodes := []*v1.Node{{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
+		Spec:       v1.NodeSpec{ProviderID: "cloudscale://" + serverUUID},
+	}}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, _ = l.EnsureLoadBalancer(t.Context(), "test-cluster", service, nodes)
+	}()
+	go func() {
+		defer wg.Done()
+		_, _ = l.EnsureLoadBalancer(t.Context(), "test-cluster", service, nodes)
+	}()
+	wg.Wait()
+
+	assert.Equal(t, 1, createCount, "expected exactly one LB creation")
 }
 
 func TestFilterNodesBySelector(t *testing.T) {
