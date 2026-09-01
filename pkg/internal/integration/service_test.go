@@ -964,6 +964,9 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 
 	// Now expect to see an IP address from the node's private network
 	assertPrefix(addr, &local_policy_prefix)
+	// Allow the load balancer to stabilize after switching traffic policy.
+	// Without this, we may see connection resets during rapid assertions.
+	time.Sleep(5 * time.Second)
 	assertFastResponses(addr, &local_policy_prefix)
 
 	// Go back to the Cluster policy
@@ -980,6 +983,9 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	s.Require().NotNil(service)
 
 	assertPrefix(addr, &cluster_policy_prefix)
+	// Allow the load balancer to stabilize after switching traffic policy.
+	// Without this, we may see connection resets during rapid assertions.
+	time.Sleep(5 * time.Second)
 	assertFastResponses(addr, &cluster_policy_prefix)
 }
 
