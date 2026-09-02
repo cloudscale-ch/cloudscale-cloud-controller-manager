@@ -313,6 +313,304 @@ func actualLbState(
 	return s, nil
 }
 
+func makePoolKey(p *cloudscale.LoadBalancerPool) string {
+	return fmt.Sprint(
+		p.Name,
+		p.Algorithm,
+		p.Protocol,
+	)
+}
+
+func makePoolMemberKey(m cloudscale.LoadBalancerPoolMember) string {
+	return fmt.Sprintf(
+		m.Name,
+		m.Enabled,
+		m.MonitorPort,
+		m.ProtocolPort,
+		m.Address,
+		m.Subnet,
+	)
+}
+
+func makeListenerKey(l cloudscale.LoadBalancerListener) string {
+	return fmt.Sprintf(
+		l.Name,
+		l.Protocol,
+		l.ProtocolPort,
+	)
+}
+
+func makeMonitorKey(m cloudscale.LoadBalancerHealthMonitor) string {
+	httpVersion := "1.1"
+
+	if m.HTTP != nil && m.HTTP.Version != "" {
+		httpVersion = m.HTTP.Version
+	}
+
+	return fmt.Sprintf(
+		m.Type,
+		httpVersion,
+	)
+}
+
+func makeDeleteActions(url string) []actions.Action {
+	return []actions.Action{
+		actions.DeleteResource(url),
+		actions.Sleep(500 * time.Millisecond),
+	}
+}
+
+func handleLoadBalancer(
+	desired, actual *lbState,
+) ([]actions.Action, bool, error) {
+	next := make([]actions.Action, 0)
+
+	// If no lb is desired, and there is none, stop
+	if desired.lb == nil && actual.lb == nil {
+		return next, false, nil
+	}
+
+	// If an lb is desired, and there is none, create one. This always causes
+	// a re-evaluation and we'll be called again with an existing lb.
+	if desired.lb != nil && actual.lb == nil {
+		next = append(next,
+			actions.CreateLb(desired.lb),
+			actions.Refetch(),
+		)
+
+		return next, true, nil
+	}
+
+	// No matter what happens next, we need an lb that is ready
+	next = append(next, actions.AwaitLb(actual.lb))
+
+	// If the lb should be deleted, do so (causes a cascade)
+	if desired.lb == nil && actual.lb != nil {
+		next = append(next, actions.DeleteResource(actual.lb.HREF))
+
+		return next, true, nil
+	}
+
+	// Validate immutable LB properties
+	if err := validateLbChanges(desired, actual); err != nil {
+		return nil, false, err
+	}
+
+	// If the name of the lb is wrong, change it
+	if desired.lb.Name != actual.lb.Name {
+		next = append(
+			next, actions.RenameLb(actual.lb.UUID, desired.lb.Name))
+	}
+
+	return next, false, nil
+}
+
+func handlePoolChanges(
+	desired, actual *lbState,
+) ([]actions.Action, bool) {
+	next := make([]actions.Action, 0)
+
+	poolsToDelete, poolsToCreate := compare.Diff(
+		desired.pools,
+		actual.pools,
+		makePoolKey,
+	)
+
+	// Remove undesired pools
+	for _, p := range poolsToDelete {
+		for _, m := range actual.members[p] {
+			next = append(next, makeDeleteActions(m.HREF)...)
+		}
+		next = append(next, makeDeleteActions(p.HREF)...)
+	}
+
+	// Create missing pools
+	for _, p := range poolsToCreate {
+		next = append(next, actions.CreatePool(actual.lb.UUID, p))
+	}
+
+	// If there have been pool changes, refresh
+	if len(poolsToDelete) > 0 || len(poolsToCreate) > 0 {
+		next = append(next, actions.Refetch())
+
+		return next, true
+	}
+
+	return next, false
+}
+
+func handleMemberChanges(
+	desired, actual *lbState,
+	actualPools map[string]*cloudscale.LoadBalancerPool,
+) ([]actions.Action, error) {
+	next := make([]actions.Action, 0)
+
+	for _, d := range desired.pools {
+		a := actualPools[d.Name]
+
+		// This would indicate a programming error above
+		if a == nil {
+			return nil, fmt.Errorf(
+				"no existing pool found for %s", d.Name)
+		}
+
+		// Delete and create pool members
+		msToDelete, msToCreate := compare.Diff(
+			desired.members[d],
+			actual.members[a],
+			makePoolMemberKey,
+		)
+
+		for _, m := range msToDelete {
+			next = append(next, makeDeleteActions(m.HREF)...)
+		}
+
+		if len(msToDelete) > 0 && len(msToCreate) > 0 {
+			next = append(next, actions.Sleep(5*time.Second))
+		}
+
+		for _, m := range msToCreate {
+			next = append(next, actions.CreatePoolMember(a.UUID, &m))
+		}
+	}
+
+	return next, nil
+}
+
+func handleListenerChanges(
+	desired, actual *lbState,
+	actualPools map[string]*cloudscale.LoadBalancerPool,
+) ([]actions.Action, error) {
+	next := make([]actions.Action, 0)
+
+	for _, d := range desired.pools {
+		a := actualPools[d.Name]
+
+		// This would indicate a programming error above
+		if a == nil {
+			return nil, fmt.Errorf(
+				"no existing pool found for %s", d.Name)
+		}
+
+		// Delete and create listeners
+		lsToDelete, lsToCreate := compare.Diff(
+			desired.listeners[d],
+			actual.listeners[a],
+			makeListenerKey,
+		)
+
+		for _, l := range lsToDelete {
+			next = append(next, makeDeleteActions(l.HREF)...)
+		}
+
+		if len(lsToDelete) > 0 && len(lsToCreate) > 0 {
+			next = append(next, actions.Sleep(5*time.Second))
+		}
+
+		for _, l := range lsToCreate {
+			next = append(next, actions.CreateListener(a.UUID, &l))
+		}
+	}
+
+	return next, nil
+}
+
+func handleMonitorChanges(
+	desired, actual *lbState,
+	actualPools map[string]*cloudscale.LoadBalancerPool,
+) ([]actions.Action, error) {
+	next := make([]actions.Action, 0)
+
+	for _, d := range desired.pools {
+		a := actualPools[d.Name]
+
+		// This would indicate a programming error above
+		if a == nil {
+			return nil, fmt.Errorf(
+				"no existing pool found for %s", d.Name)
+		}
+
+		// Delete and create monitors
+		monToDelete, monToCreate := compare.Diff(
+			desired.monitors[d],
+			actual.monitors[a],
+			makeMonitorKey,
+		)
+
+		for _, m := range monToDelete {
+			next = append(next, makeDeleteActions(m.HREF)...)
+		}
+
+		if len(monToDelete) > 0 && len(monToCreate) > 0 {
+			next = append(next, actions.Sleep(5*time.Second))
+		}
+
+		for _, m := range monToCreate {
+			next = append(
+				next, actions.CreateHealthMonitor(a.UUID, &m))
+		}
+	}
+
+	return next, nil
+}
+
+func handlePropertyUpdates(
+	desired, actual *lbState,
+	actualPools map[string]*cloudscale.LoadBalancerPool,
+) []actions.Action {
+	next := make([]actions.Action, 0)
+
+	// Update the listeners and monitors that do not need to be recreated
+	for _, d := range desired.pools {
+		a := actualPools[d.Name]
+
+		listeners := compare.Match(
+			desired.listeners[d],
+			actual.listeners[a],
+			makeListenerKey,
+		)
+
+		for _, match := range listeners {
+			next = append(next,
+				listenerUpdateActions(match[0], match[1])...)
+		}
+
+		monitors := compare.Match(
+			desired.monitors[d],
+			actual.monitors[a],
+			makeMonitorKey,
+		)
+
+		for _, match := range monitors {
+			next = append(next,
+				monitorUpdateActions(match[0], match[1])...)
+		}
+	}
+
+	return next
+}
+
+func handleFloatingIPAssignments(
+	desired, actual *lbState,
+) []actions.Action {
+	next := make([]actions.Action, 0)
+
+	_, assign := compare.Diff(
+		desired.floatingIPs, actual.floatingIPs, func(ip string) string {
+			return ip
+		},
+	)
+
+	for _, ip := range assign {
+		next = append(next, actions.AssignFloatingIP(
+			ip,
+			actual.lb.UUID,
+		))
+	}
+
+	return next
+}
+
 // nextLbActions returns a list of actions to take to ensure a desired
 // loadbalancer state is reached.
 func nextLbActions(
@@ -328,243 +626,63 @@ func nextLbActions(
 		return next, errors.New("no desired state given")
 	}
 
-	deleteResource := func(url string) {
-		next = append(next,
-			actions.DeleteResource(url),
-			actions.Sleep(500*time.Millisecond))
-	}
-
-	// Keys define the values that cause an item to be recreated. If the key
-	// of an actual item is not found in the desired list, it is dropped. If
-	// the key of a desired item does not exit, it is created.
-	poolKey := func(p *cloudscale.LoadBalancerPool) string {
-		return fmt.Sprint(
-			p.Name,
-			p.Algorithm,
-			p.Protocol,
-		)
-	}
-
-	poolMemberKey := func(m cloudscale.LoadBalancerPoolMember) string {
-		return fmt.Sprintf(
-			m.Name,
-			m.Enabled,
-			m.MonitorPort,
-			m.ProtocolPort,
-			m.Address,
-			m.Subnet,
-		)
-	}
-
-	listenerKey := func(l cloudscale.LoadBalancerListener) string {
-		return fmt.Sprintf(
-			l.Name,
-			l.Protocol,
-			l.ProtocolPort,
-		)
-	}
-
-	monitorKey := func(m cloudscale.LoadBalancerHealthMonitor) string {
-		httpVersion := "1.1"
-
-		if m.HTTP != nil && m.HTTP.Version != "" {
-			httpVersion = m.HTTP.Version
-		}
-
-		return fmt.Sprintf(
-			m.Type,
-			httpVersion,
-		)
-	}
-
-	// If no lb is desired, and there is none, stop
-	if desired.lb == nil && actual.lb == nil {
-		return next, nil
-	}
-
-	// If an lb is desired, and there is none, create one. This always causes
-	// a re-evaluation and we'll be called again with an existing lb.
-	if desired.lb != nil && actual.lb == nil {
-		next = append(next,
-			actions.CreateLb(desired.lb),
-			actions.Refetch(),
-		)
-
-		return next, nil
-	}
-
-	// No matter what happens next, we need an lb that is ready
-	next = append(next, actions.AwaitLb(actual.lb))
-
-	// If the lb should be deleted, do so (causes a cascade)
-	if desired.lb == nil && actual.lb != nil {
-		next = append(next, actions.DeleteResource(actual.lb.HREF))
-
-		return next, nil
-	}
-
-	// Validate immutable LB properties
-	if err := validateLbChanges(desired, actual); err != nil {
+	// Handle load balancer lifecycle (create, delete, rename, await)
+	lbActions, needsRefetch, err := handleLoadBalancer(desired, actual)
+	if err != nil {
 		return nil, err
 	}
-
-	// If the name of the lb is wrong, change it
-	if desired.lb.Name != actual.lb.Name {
-		next = append(next, actions.RenameLb(actual.lb.UUID, desired.lb.Name))
-	}
-
-	// All other changes are applied aggressively, as the customer would have
-	// to do that manually anyway by recreating the service, which would be
-	// more disruptive.
-	poolsToDelete, poolsToCreate := compare.Diff(
-		desired.pools,
-		actual.pools,
-		poolKey,
-	)
-
-	// Remove undesired pools
-	for _, p := range poolsToDelete {
-		for _, m := range actual.members[p] {
-			deleteResource(m.HREF)
-		}
-		deleteResource(p.HREF)
-	}
-
-	// Create missing pools
-	for _, p := range poolsToCreate {
-		next = append(next, actions.CreatePool(actual.lb.UUID, p))
-	}
-
-	// If there have been pool changes, refresh
-	if len(poolsToDelete) > 0 || len(poolsToCreate) > 0 {
-		next = append(next, actions.Refetch())
-
+	next = append(next, lbActions...)
+	if needsRefetch {
 		return next, nil
 	}
 
-	// Update pool members
-	actualPools := actual.poolsByName()
-	actionCount := len(next)
-
-	for _, d := range desired.pools {
-		a := actualPools[d.Name]
-
-		// This would indicate a programming error above
-		if a == nil {
-			return nil, fmt.Errorf("no existing pool found for %s", d.Name)
-		}
-
-		// Delete and create pool members
-		msToDelete, msToCreate := compare.Diff(
-			desired.members[d],
-			actual.members[a],
-			poolMemberKey,
-		)
-
-		for _, m := range msToDelete {
-			member := m
-			deleteResource(member.HREF)
-		}
-
-		if len(msToDelete) > 0 && len(msToCreate) > 0 {
-			next = append(next, actions.Sleep(5*time.Second))
-		}
-
-		for _, m := range msToCreate {
-			member := m
-			next = append(next, actions.CreatePoolMember(a.UUID, &member))
-		}
-
-		// Delete and create listeners
-		lsToDelete, lsToCreate := compare.Diff(
-			desired.listeners[d],
-			actual.listeners[a],
-			listenerKey,
-		)
-
-		for _, l := range lsToDelete {
-			listener := l
-			deleteResource(listener.HREF)
-		}
-
-		if len(lsToDelete) > 0 && len(lsToCreate) > 0 {
-			next = append(next, actions.Sleep(5*time.Second))
-		}
-
-		for _, l := range lsToCreate {
-			listener := l
-			next = append(next, actions.CreateListener(a.UUID, &listener))
-		}
-
-		// Delete and create monitors
-		monToDelete, monToCreate := compare.Diff(
-			desired.monitors[d],
-			actual.monitors[a],
-			monitorKey,
-		)
-
-		for _, m := range monToDelete {
-			mon := m
-			deleteResource(mon.HREF)
-		}
-
-		if len(monToDelete) > 0 && len(monToCreate) > 0 {
-			next = append(next, actions.Sleep(5*time.Second))
-		}
-
-		for _, m := range monToCreate {
-			mon := m
-			next = append(next, actions.CreateHealthMonitor(a.UUID, &mon))
-		}
+	// Handle pool structural changes (create/delete pools)
+	poolActions, needsRefetch := handlePoolChanges(desired, actual)
+	next = append(next, poolActions...)
+	if needsRefetch {
+		return next, nil
 	}
 
-	// If there have been member changes, refresh
+	// Handle pool content structural changes
+	actionCount := len(next)
+	actualPools := actual.poolsByName()
+
+	memberActions, err := handleMemberChanges(
+		desired, actual, actualPools)
+	if err != nil {
+		return nil, err
+	}
+	next = append(next, memberActions...)
+
+	listenerActions, err := handleListenerChanges(
+		desired, actual, actualPools)
+	if err != nil {
+		return nil, err
+	}
+	next = append(next, listenerActions...)
+
+	monitorActions, err := handleMonitorChanges(
+		desired, actual, actualPools)
+	if err != nil {
+		return nil, err
+	}
+	next = append(next, monitorActions...)
+
+	// If there have been content changes, refresh
 	if actionCount < len(next) {
 		next = append(next, actions.Refetch())
 
 		return next, nil
 	}
 
-	// Update the listeners and monitors that do not need to be recreated
-	for _, d := range desired.pools {
-		a := actualPools[d.Name]
+	// Handle property updates for listeners and monitors
+	updateActions := handlePropertyUpdates(
+		desired, actual, actualPools)
+	next = append(next, updateActions...)
 
-		listeners := compare.Match(
-			desired.listeners[d],
-			actual.listeners[a],
-			listenerKey,
-		)
-
-		for _, match := range listeners {
-			next = append(next,
-				listenerUpdateActions(match[0], match[1])...)
-		}
-
-		monitors := compare.Match(
-			desired.monitors[d],
-			actual.monitors[a],
-			monitorKey,
-		)
-
-		for _, match := range monitors {
-			next = append(next,
-				monitorUpdateActions(match[0], match[1])...)
-		}
-	}
-
-	// Find the Floating IPs that need to be changed
-	_, assign := compare.Diff(
-		desired.floatingIPs, actual.floatingIPs, func(ip string) string {
-			return ip
-		},
-	)
-
-	for _, ip := range assign {
-		next = append(next, actions.AssignFloatingIP(
-			ip,
-			actual.lb.UUID,
-		))
-	}
+	// Handle floating IP assignments
+	ipActions := handleFloatingIPAssignments(desired, actual)
+	next = append(next, ipActions...)
 
 	return next, nil
 }
