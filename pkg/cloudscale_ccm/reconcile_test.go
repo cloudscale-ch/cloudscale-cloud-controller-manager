@@ -45,13 +45,19 @@ func TestDesiredName(t *testing.T) {
 	nodes := []*v1.Node{}
 	servers := []cloudscale.Server{}
 
+	// Empty servers without zone annotation should error
+	_, err := desiredLbState(i, nodes, servers)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no loadbalancer zone set")
+
+	s.Annotations = make(map[string]string)
+	s.Annotations[LoadBalancerZone] = "lpg1"
+
 	// No name is given, generate one
 	state, err := desiredLbState(i, nodes, servers)
 	assert.NoError(t, err)
 	assert.Equal(t, state.lb.Name, "k8s-service-deadbeef")
 
-	// This can be overridden
-	s.Annotations = make(map[string]string)
 	s.Annotations[LoadBalancerName] = "foo"
 
 	state, err = desiredLbState(i, nodes, servers)
@@ -90,6 +96,23 @@ func TestDesiredZone(t *testing.T) {
 	state, err := desiredLbState(i, nodes, servers)
 	assert.NoError(t, err)
 	assert.Equal(t, "rma1", state.lb.Zone.Slug)
+}
+
+func TestDesiredZone_EmptyServersWithAnnotation(t *testing.T) {
+	t.Parallel()
+
+	s := testkit.NewService("service").V1()
+	s.Annotations = make(map[string]string)
+	s.Annotations[LoadBalancerZone] = "lpg1"
+	i := newServiceInfo(s, "")
+
+	nodes := []*v1.Node{}
+	servers := []cloudscale.Server{}
+
+	// Zone is explicitly set, so empty servers should be OK
+	state, err := desiredLbState(i, nodes, servers)
+	assert.NoError(t, err)
+	assert.Equal(t, "lpg1", state.lb.Zone.Slug)
 }
 
 func TestDesiredService(t *testing.T) {

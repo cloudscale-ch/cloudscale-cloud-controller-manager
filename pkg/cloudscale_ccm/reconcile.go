@@ -10,11 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/actions"
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/compare"
 	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/actions"
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/compare"
 )
 
 type lbState struct {
@@ -73,6 +74,11 @@ func desiredLbState(
 				)
 			}
 			zone = s.Zone.Slug
+		}
+		if zone == "" {
+			return nil, errors.New(
+				"no loadbalancer zone set and no server zone information available - nodes may not be provisioned yet",
+			)
 		}
 	}
 
