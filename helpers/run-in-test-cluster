@@ -144,6 +144,10 @@ function update-ccm() {
   # docker save $IMAGE -o image.tar
   # run-in-test-cluster
   #
+  # When IMAGE_SOURCE=import, the imagePullPolicy is set to Never,
+  # to ensure the imported image is used and nothing is pulled from
+  # a registry.
+  #
   if [[ "${IMAGE_SOURCE-build}" == "build" ]]; then
     build-image
   else
@@ -161,6 +165,12 @@ function apply-resources() {
     deploy/latest.yml \
     | sed "s|https://api.cloudscale.ch|${api_url}|g" \
     > /tmp/ccm.yml
+
+  if [[ "${IMAGE_SOURCE-build}" == "import" ]]; then
+    # Ensure the imported image is used, and no image is pulled
+    # from a remote registry.
+    sed -i 's|imagePullPolicy: IfNotPresent|imagePullPolicy: Never|g' /tmp/ccm.yml
+  fi
 
   export KUBECONFIG=k8test/cluster/admin.conf
   kubectl delete -f /tmp/ccm.yml --ignore-not-found=true
