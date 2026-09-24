@@ -3,8 +3,9 @@ package cloudscale_ccm
 import (
 	"testing"
 
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/testkit"
 )
 
 func TestNewServicePanic(t *testing.T) {

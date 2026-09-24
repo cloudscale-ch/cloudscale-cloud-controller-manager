@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+
+	"github.com/cloudscale-ch/cloudscale-go-sdk/v10"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/internal/limiter"
-	"github.com/cloudscale-ch/cloudscale-go-sdk/v6"
-	v1 "k8s.io/api/core/v1"
 )
 
 // serverMapper maps cloudscale servers to Kubernetes nodes.
@@ -20,7 +22,6 @@ func (s *serverMapper) findByNode(
 	ctx context.Context,
 	node *v1.Node,
 ) *limiter.Limiter[cloudscale.Server] {
-
 	if node == nil {
 		return limiter.New[cloudscale.Server](nil)
 	}
@@ -74,12 +75,11 @@ func (s *serverMapper) getByProviderID(
 	ctx context.Context,
 	id cloudscaleProviderID,
 ) *limiter.Limiter[cloudscale.Server] {
-
 	server, err := s.client.Servers.Get(ctx, id.UUID().String())
 	if err != nil {
 		var response *cloudscale.ErrorResponse
 
-		if errors.As(err, &response) && response.StatusCode == 404 {
+		if errors.As(err, &response) && response.StatusCode == http.StatusNotFound {
 			return limiter.New[cloudscale.Server](nil)
 		}
 
@@ -95,7 +95,6 @@ func (s *serverMapper) findByName(
 	ctx context.Context,
 	name string,
 ) *limiter.Limiter[cloudscale.Server] {
-
 	servers, err := s.client.Servers.List(ctx)
 	if err != nil {
 		return limiter.New[cloudscale.Server](err)
@@ -116,7 +115,6 @@ func (s *serverMapper) findByName(
 // nodeAddresses returns a v1.nodeAddresses slice for the metadata.
 func (s *serverMapper) nodeAddresses(
 	server *cloudscale.Server) []v1.NodeAddress {
-
 	if server == nil {
 		return []v1.NodeAddress{}
 	}

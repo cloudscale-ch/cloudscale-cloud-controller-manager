@@ -25,7 +25,6 @@ func Join[T any](limiters ...*Limiter[T]) *Limiter[T] {
 	}
 
 	for _, limiter := range limiters {
-
 		// Keep the first error
 		if joined.Error != nil && limiter.Error != nil {
 			joined.Error = limiter.Error
