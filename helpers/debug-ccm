@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Collect diagnostic information from the test cluster when integration tests fail.
+#
+# Usage: helpers/debug-ccm <test-name> <output-dir>
+# Example: helpers/debug-ccm "k8s-1.35.8-run-12345678" _artifacts
+
+TEST_NAME="${1:-integration-test}"
+OUTPUT_DIR="${2:-_artifacts}"
+KUBECONFIG="${KUBECONFIG:-k8test/cluster/admin.conf}"
+CLOUDSCALE_API_TOKEN="${CLOUDSCALE_API_TOKEN:-}"
+CLOUDSCALE_API_URL="${CLOUDSCALE_API_URL:-https://api.cloudscale.ch}"
+RUN_ID="${GITHUB_RUN_ID:-$(date +%s)}"
+
+# Create output directory structure
+mkdir -p "$OUTPUT_DIR"/{logs,events,resources,loadbalancers}
+
+# 1. Collect CCM logs
+kubectl --kubeconfig="$KUBECONFIG" logs -l k8s-app=cloudscale-cloud-controller-manager \
+    -n kube-system --all-containers > "$OUTPUT_DIR/logs/ccm.log" 2>&1
+
+# 2. Collect Kubernetes events (cluster-wide)
+kubectl --kubeconfig="$KUBECONFIG" get events --all-namespaces \
+    --sort-by='.lastTimestamp' > "$OUTPUT_DIR/events/cluster-events.txt" 2>&1
+
+# 3. Collect resource states for test namespaces
+for ns in $(kubectl --kubeconfig="$KUBECONFIG" get namespaces -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep cloudscale-test || true); do
+    kubectl --kubeconfig="$KUBECONFIG" get services    -n "$ns" -o yaml > "$OUTPUT_DIR/resources/services-$ns.yaml"    2>&1
+    kubectl --kubeconfig="$KUBECONFIG" get deployments -n "$ns" -o yaml > "$OUTPUT_DIR/resources/deployments-$ns.yaml" 2>&1
+    kubectl --kubeconfig="$KUBECONFIG" get pods        -n "$ns" -o yaml > "$OUTPUT_DIR/resources/pods-$ns.yaml"        2>&1
+    kubectl --kubeconfig="$KUBECONFIG" get endpoints   -n "$ns" -o yaml > "$OUTPUT_DIR/resources/endpoints-$ns.yaml"   2>&1
+done
+
+# 4. Query cloudscale.ch API for load balancers (if token available)
+if [[ -n "$CLOUDSCALE_API_TOKEN" ]]; then
+    curl -s -H "Authorization: Bearer $CLOUDSCALE_API_TOKEN" \
+        "$CLOUDSCALE_API_URL/v1/load-balancers" \
+        | jq '.' \
+        > "$OUTPUT_DIR/loadbalancers/cloudscale-lbs.json" 2>&1
+
+    curl -s -H "Authorization: Bearer $CLOUDSCALE_API_TOKEN" \
+        "$CLOUDSCALE_API_URL/v1/load-balancers/pools" \
+        | jq '.' > "$OUTPUT_DIR/loadbalancers/cloudscale-pools.json" 2>&1
+fi
+
+# 5. Collect node information
+kubectl --kubeconfig="$KUBECONFIG" get nodes    -o yaml    > "$OUTPUT_DIR/resources/nodes.yaml"        2>&1
+kubectl --kubeconfig="$KUBECONFIG" describe nodes          > "$OUTPUT_DIR/resources/nodes-describe.txt" 2>&1
+
+# 6. Create summary file with metadata
+cat > "$OUTPUT_DIR/summary.txt" <<EOF
+Test: $TEST_NAME
+Run ID: $RUN_ID
+Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+Kubernetes Version: $(kubectl --kubeconfig="$KUBECONFIG" version 2>&1 | tail -1)
+CCM Image: $(kubectl --kubeconfig="$KUBECONFIG" get pods -n kube-system -l k8s-app=cloudscale-cloud-controller-manager -o jsonpath='{.items[0].spec.containers[0].image}' 2>&1)
+Cluster Prefix: ${CLUSTER_PREFIX:-unknown}
+EOF
+
+echo "Debug information collected in $OUTPUT_DIR"

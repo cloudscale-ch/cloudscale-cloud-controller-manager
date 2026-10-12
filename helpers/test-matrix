@@ -16,7 +16,7 @@ function matrixentry {
   # A semi-preditable cluster prefix (we want to reuse them across jobs, but
   # not inside a job). Reuse allows us to ensure that the cleanup process
   # at the beginning of a test will remove old runs.
-  echo "k8test-matrix-$1"
+  echo "ccm-matrix-$1"
 }
 
 function matrixobject {
