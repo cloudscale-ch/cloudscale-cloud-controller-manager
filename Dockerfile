@@ -1,4 +1,4 @@
-FROM golang:1.27.1 AS builder
+FROM golang:1.27.3 AS builder
 
 WORKDIR /src
 
@@ -21,7 +21,7 @@ ENV BUILD_DATE=${BUILD_DATE}
 
 RUN make build
 
-FROM alpine:3.23.6
+FROM alpine:3.23.7
 RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /src/bin/cloudscale-cloud-controller-manager /usr/local/bin/cloudscale-cloud-controller-manager
