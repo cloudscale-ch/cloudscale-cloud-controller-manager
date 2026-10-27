@@ -136,15 +136,52 @@ jobs:
           gh attestation verify "oci://${IMG_REPO}@${DIGEST}" --owner cloudscale-ch \
             --predicate-type https://spdx.dev/Document/v2.3
 
+      # Install manifest attached to the release. The README installs from
+      # releases/latest/download/config.yml, so every release must have it.
+      - name: Render install manifest
+        run: |
+          sed "s|:latest|:${TAG}|" deploy/latest.yml > config.yml
+          grep -q "cloudscale-cloud-controller-manager:${TAG}$" config.yml
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_URL: https://github.com/${{ github.repository }}
         run: |
           PRERELEASE_FLAG=""
           if [[ "$TAG" == *-* ]]; then
             PRERELEASE_FLAG="--prerelease"
           fi
+          NOTES=$(cat <<EOF
+          ## Configuration
+
+          This release can be installed with the following command:
+
+          \`\`\`
+          kubectl apply -f ${REPO_URL}/releases/download/${TAG}/config.yml
+          \`\`\`
+
+          Please refer to the [README](${REPO_URL}/blob/${TAG}/README.md) for detailed instructions.
+          EOF
+          )
           gh release create "$TAG" \
             --generate-notes \
+            --notes "$NOTES" \
             $PRERELEASE_FLAG \
-            sbom.spdx.json
+            sbom.spdx.json \
+            config.yml
+
+      # Runs last, so :latest only ever points at a verified image with a
+      # published release. Moved only for full releases with the highest
+      # version, so a backport release does not replace a newer image.
+      - name: Tag image as latest
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          HIGHEST=$(git tag -l 'v*.*.*' --sort=-v:refname | grep -v -- '-' | head -n1)
+          if [[ "$TAG" != "$HIGHEST" ]]; then
+            echo "Skipped :latest update, $HIGHEST is newer than $TAG"
+            exit 0
+          fi
+          docker buildx imagetools create -t "${IMG_REPO}:latest" "${IMG_REPO}@${DIGEST}"

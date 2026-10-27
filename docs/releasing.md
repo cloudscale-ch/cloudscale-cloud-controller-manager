@@ -9,7 +9,11 @@ triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which
 2. Builds and pushes the container image to [quay.io](https://quay.io).
 3. Signs the image with [cosign](https://github.com/sigstore/cosign) using keyless Sigstore signing.
 4. Attests [SLSA](https://slsa.dev) build provenance and an SBOM.
-5. Creates a GitHub Release with the attestation artifacts.
+5. Renders the install manifest `config.yml` from [`deploy/latest.yml`](../deploy/latest.yml), pinned to the
+   released image tag.
+6. Creates a GitHub Release with the `kubectl apply` install command prepended to the generated notes, and
+   `config.yml` and the SBOM attached.
+7. Moves the `:latest` image tag to the new image, for full releases with the highest version only.
 
 ## Required Tools
 
@@ -100,6 +104,16 @@ GitHub Actions automatically generates release notes when the release workflow r
    cosign tree "$IMG"
    ```
 
+   ```bash
+   # Verify the install manifest is attached and pinned to the release
+   gh release download v1.2.3 --pattern config.yml --output - | grep "image:"
+
+   # Verify :latest points to the released image (full releases only)
+   docker buildx imagetools inspect "$IMG" --format '{{json .Manifest.Digest}}'
+   docker buildx imagetools inspect quay.io/cloudscalech/cloudscale-cloud-controller-manager:latest \
+     --format '{{json .Manifest.Digest}}'
+   ```
+
 4. **Test installation on a test cluster**:
 
    ```bash
@@ -134,5 +148,7 @@ per SemVer:
 - `v1.2.3-rc.1`
 
 The container image is pushed with the exact same tag (e.g. `v1.2.3-alpha.1`),
-and the same signing and attestation steps are applied.
+and the same signing and attestation steps are applied. Pre-releases also get
+`config.yml` and the install command in the release notes, but the `:latest`
+image tag is not moved.
 
