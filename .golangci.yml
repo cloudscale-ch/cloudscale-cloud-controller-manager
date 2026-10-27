@@ -1,6 +1,9 @@
 version: "2"
 run:
   allow-parallel-runners: true
+  # include the integration tests, which are behind a build tag
+  build-tags:
+    - integration
 linters:
   default: none
   enable:

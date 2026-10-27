@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"net"
 	"net/netip"
@@ -30,7 +31,6 @@ import (
 
 func (s *IntegrationTestSuite) CreateDeployment(
 	name string, image string, replicas int32, protocol v1.Protocol, port int32, options ...func(*appsv1.DeploymentSpec)) {
-
 	spec := appsv1.DeploymentSpec{
 		Replicas: &replicas,
 		Selector: &metav1.LabelSelector{
@@ -65,8 +65,8 @@ func (s *IntegrationTestSuite) CreateDeployment(
 	_, err := s.k8s.AppsV1().Deployments(s.ns).Create(
 		context.Background(),
 		&appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{Name: name},
-			Spec:       spec,
+			Name: name,
+			Spec: spec,
 		},
 		metav1.CreateOptions{},
 	)
@@ -103,7 +103,6 @@ func (s *IntegrationTestSuite) AwaitDeploymentReady(name string, timeout time.Du
 
 func (s *IntegrationTestSuite) CreateAndAwaitDeployment(
 	name string, image string, replicas int32, protocol v1.Protocol, port int32, options ...func(*appsv1.DeploymentSpec)) {
-
 	s.CreateDeployment(name, image, replicas, protocol, port, options...)
 	s.AwaitDeploymentReady(name, 120*time.Second)
 }
@@ -112,9 +111,7 @@ func (s *IntegrationTestSuite) CreateConfigMap(name string, data map[string]stri
 	_, err := s.k8s.CoreV1().ConfigMaps(s.ns).Create(
 		context.Background(),
 		&v1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: name,
-			},
+			Name: name,
 			Data: data,
 		},
 		metav1.CreateOptions{},
@@ -147,7 +144,6 @@ func WithServicePort(sp ServicePortSpec) func(spec *v1.ServiceSpec) {
 
 func (s *IntegrationTestSuite) ExposeDeployment(
 	name string, annotations map[string]string, options ...func(spec *v1.ServiceSpec)) {
-
 	spec := v1.ServiceSpec{
 		Type: v1.ServiceTypeLoadBalancer,
 		Selector: map[string]string{
@@ -167,11 +163,9 @@ func (s *IntegrationTestSuite) ExposeDeployment(
 		_, err = s.k8s.CoreV1().Services(s.ns).Create(
 			context.Background(),
 			&v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        name,
-					Annotations: annotations,
-				},
-				Spec: spec,
+				Name:        name,
+				Annotations: annotations,
+				Spec:        spec,
 			},
 			metav1.CreateOptions{},
 		)
@@ -181,9 +175,7 @@ func (s *IntegrationTestSuite) ExposeDeployment(
 		if service.Annotations == nil {
 			service.Annotations = map[string]string{}
 		}
-		for key, value := range annotations {
-			service.Annotations[key] = value
-		}
+		maps.Copy(service.Annotations, annotations)
 
 		_, err = s.k8s.CoreV1().Services(s.ns).Update(
 			context.Background(),
@@ -197,16 +189,13 @@ func (s *IntegrationTestSuite) ExposeDeployment(
 // RunJob starts a single job and then awaits the result, returing it as string
 func (s *IntegrationTestSuite) RunJob(
 	image string, timeout time.Duration, cmd ...string) string {
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	name := fmt.Sprintf("job-%08x", rand.Uint32())
+	name := fmt.Sprintf("job-%08x", rand.Uint32()) // #nosec G404 - Unique name, not a secret
 
 	// Specify the job
 	spec := batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
+		Name: name,
 		Spec: batchv1.JobSpec{
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
@@ -268,7 +257,6 @@ func (s *IntegrationTestSuite) RunJob(
 
 // CCMLogs returns all the logs of the CCM since the given time.
 func (s *IntegrationTestSuite) CCMLogs(start time.Time) string {
-
 	pods, err := s.k8s.CoreV1().Pods("kube-system").List(
 		context.Background(),
 		metav1.ListOptions{
@@ -290,7 +278,7 @@ func (s *IntegrationTestSuite) CCMLogs(start time.Time) string {
 
 		stream, err := logs.Stream(context.Background())
 		s.Require().NoError(err)
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		bytes, err := io.ReadAll(stream)
 		s.Require().NoError(err)
@@ -332,7 +320,7 @@ func (s *IntegrationTestSuite) AwaitServiceReady(
 
 			// EnsureLoadBalancer sets the annotation, and then returns the
 			// load balancer status to Kubernetes. This means there is a short
-			// window between setting the annotation, and the service receving
+			// window between setting the annotation, and the service receiving
 			// its load balancer configuration.
 			//
 			// To avoid races, we therefore have to check for the annotation,
@@ -349,7 +337,6 @@ func (s *IntegrationTestSuite) AwaitServiceReady(
 }
 
 func (s *IntegrationTestSuite) TestServiceEndToEnd() {
-
 	// Note the start for the log
 	start := time.Now()
 
@@ -382,7 +369,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEnd() {
 	s.T().Log("Verifying hostname service responses")
 	responses := make(map[string]int)
 	errs := 0
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		response, err := testkit.HelloNginx(s.T().Context(), addr, 80)
 		if err != nil {
 			s.T().Logf("Request %d failed: %s", i, err)
@@ -544,8 +531,8 @@ func (s *IntegrationTestSuite) verifyLBAvailability(name string, start time.Time
 	return service
 }
 
-// assertLBPoolMembersLen fetches the loadbalancer pool members and asserts the size is equal given len.
-func (s *IntegrationTestSuite) assertLBPoolMembersLen(service *v1.Service, len int) error {
+// assertLBPoolMembersLen fetches the loadbalancer pool members and asserts the size is equal given count.
+func (s *IntegrationTestSuite) assertLBPoolMembersLen(service *v1.Service, count int) error {
 	pools, err := s.api.LoadBalancerPools.List(s.T().Context())
 	if err != nil {
 		return fmt.Errorf("unable to list loadbalancer pools: %w", err)
@@ -563,12 +550,11 @@ func (s *IntegrationTestSuite) assertLBPoolMembersLen(service *v1.Service, len i
 		return fmt.Errorf("unable to list pool members: %w", err)
 	}
 
-	s.Assert().Len(members, len)
+	s.Assert().Len(members, count)
 	return nil
 }
 
 func (s *IntegrationTestSuite) TestServiceEndToEndUDP() {
-
 	// Note the start for the log
 	start := time.Now()
 
@@ -616,16 +602,17 @@ func (s *IntegrationTestSuite) TestServiceEndToEndUDP() {
 	successes := 0
 
 	// Create UDP client
-	conn, err := net.Dial("udp", fmt.Sprintf("%s:5000", addr))
+	conn, err := (&net.Dialer{}).DialContext(
+		s.T().Context(), "udp", fmt.Sprintf("%s:5000", addr))
 	s.Require().NoError(err)
 	s.T().Log("UDP client created successfully")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Set read timeout
-	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	s.Require().NoError(conn.SetReadDeadline(time.Now().Add(5 * time.Second)))
 
 	message := []byte("Tell me a joke")
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		// Send message
 		_, err := conn.Write(message)
 		if err != nil {
@@ -666,7 +653,6 @@ func (s *IntegrationTestSuite) TestServiceEndToEndUDP() {
 }
 
 func (s *IntegrationTestSuite) TestServiceEndToEndDualProtocol() {
-
 	// Note the start for the log
 	start := time.Now()
 
@@ -702,12 +688,8 @@ func (s *IntegrationTestSuite) TestServiceEndToEndDualProtocol() {
 		spec.Template.Spec.Volumes = []v1.Volume{
 			{
 				Name: "config",
-				VolumeSource: v1.VolumeSource{
-					ConfigMap: &v1.ConfigMapVolumeSource{
-						LocalObjectReference: v1.LocalObjectReference{
-							Name: "coredns-config",
-						},
-					},
+				ConfigMap: &v1.ConfigMapVolumeSource{
+					Name: "coredns-config",
 				},
 			},
 		}
@@ -754,7 +736,7 @@ func (s *IntegrationTestSuite) TestServiceEndToEndDualProtocol() {
 	udpSuccesses := 0
 	udpErrors := 0
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		mx, err := resolver.LookupMX(ctx, "cloudscale.ch")
 		cancel()
@@ -815,7 +797,6 @@ func (s *IntegrationTestSuite) TestServiceEndToEndDualProtocol() {
 }
 
 func (s *IntegrationTestSuite) TestServiceVIPAddresses() {
-
 	// Get the private subnet used by the nodes
 	var subnet string
 	var public string
@@ -849,8 +830,8 @@ func (s *IntegrationTestSuite) TestServiceVIPAddresses() {
 	// Use a worker as a jumphost to check if we get "foo"
 	addr := service.Status.LoadBalancer.Ingress[0].IP
 
-	cmd := exec.Command(
-		"ssh", fmt.Sprintf("ubuntu@%s", public), "-i", s.sshkey,
+	cmd := exec.CommandContext( // #nosec G204 - Test cluster addresses, not user input
+		s.T().Context(), "ssh", fmt.Sprintf("ubuntu@%s", public), "-i", s.sshkey,
 		fmt.Sprintf(
 			"curl -s --retry 3 --retry-delay 3 --retry-all-errors http://%s",
 			addr,
@@ -862,13 +843,12 @@ func (s *IntegrationTestSuite) TestServiceVIPAddresses() {
 }
 
 func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
-
 	// Traffic received via default "Cluster" policy is snatted via node.
-	cluster_policy_prefix := netip.MustParsePrefix("10.0.0.0/16")
+	clusterPolicyPrefix := netip.MustParsePrefix("10.0.0.0/16")
 
 	// Traffic received via "Local" policy has no natting. The address is
 	// going to be private network address of the load balancer.
-	local_policy_prefix := netip.MustParsePrefix("10.100.0.0/16")
+	localPolicyPrefix := netip.MustParsePrefix("10.100.0.0/16")
 
 	// Deploy a TCP server that returns the remote IP address. Only use a
 	// single instance as we want to check that the routing works right with
@@ -885,7 +865,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 		start := time.Now()
 		timeout := 300
 
-		for i := 0; i < timeout; i++ {
+		for range timeout {
 			time.Sleep(1 * time.Second)
 
 			peer, err := testkit.HTTPRead(s.T().Context(), url)
@@ -924,7 +904,7 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	// Ensures the traffic is handled without unexpected delay
 	assertFastResponses := func(addr string, _ *netip.Prefix) {
 		url := fmt.Sprintf("http://%s", addr)
-		for i := 0; i < 60; i++ {
+		for range 60 {
 			before := time.Now()
 			_, err := testkit.HTTPRead(s.T().Context(), url)
 			after := time.Now()
@@ -946,8 +926,8 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	// In its initial state, expect a natted IP address
 	addr := service.Status.LoadBalancer.Ingress[0].IP
 
-	assertPrefix(addr, &cluster_policy_prefix)
-	assertFastResponses(addr, &cluster_policy_prefix)
+	assertPrefix(addr, &clusterPolicyPrefix)
+	assertFastResponses(addr, &clusterPolicyPrefix)
 
 	// Configure the service to use the local traffic policy
 	s.T().Log("Switching peeraddr service to 'Local' traffic policy")
@@ -963,11 +943,11 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	s.Require().NotNil(service)
 
 	// Now expect to see an IP address from the node's private network
-	assertPrefix(addr, &local_policy_prefix)
+	assertPrefix(addr, &localPolicyPrefix)
 	// Allow the load balancer to stabilize after switching traffic policy.
 	// Without this, we may see connection resets during rapid assertions.
 	time.Sleep(5 * time.Second)
-	assertFastResponses(addr, &local_policy_prefix)
+	assertFastResponses(addr, &localPolicyPrefix)
 
 	// Go back to the Cluster policy
 	s.T().Log("Switching peeraddr service back to 'Cluster' traffic policy")
@@ -982,11 +962,11 @@ func (s *IntegrationTestSuite) TestServiceTrafficPolicyLocal() {
 	service = s.AwaitServiceReady("peeraddr", 1*time.Second, 0)
 	s.Require().NotNil(service)
 
-	assertPrefix(addr, &cluster_policy_prefix)
+	assertPrefix(addr, &clusterPolicyPrefix)
 	// Allow the load balancer to stabilize after switching traffic policy.
 	// Without this, we may see connection resets during rapid assertions.
 	time.Sleep(5 * time.Second)
-	assertFastResponses(addr, &cluster_policy_prefix)
+	assertFastResponses(addr, &clusterPolicyPrefix)
 }
 
 func (s *IntegrationTestSuite) TestServiceWithGlobalFloatingIP() {
@@ -1003,7 +983,6 @@ func (s *IntegrationTestSuite) TestServiceWithRegionalFloatingIP() {
 
 func (s *IntegrationTestSuite) RunTestServiceWithFloatingIP(
 	fip *cloudscale.FloatingIP) {
-
 	// Deploy a TCP server that returns the hostname
 	s.T().Log("Creating nginx deployment")
 	s.CreateAndAwaitDeployment("nginx", "docker.io/nginxdemos/hello@sha256:751bf8933179b086091927eefd952f46b19ba37fa22d47e88da1c0c9921cbc8e", 2, v1.ProtocolTCP, 80)
@@ -1021,12 +1000,12 @@ func (s *IntegrationTestSuite) RunTestServiceWithFloatingIP(
 
 	// Ensure that we get responses from two different pods (round-robin)
 	s.T().Log("Verifying hostname service responses")
-	addr := strings.SplitN(fip.Network, "/", 2)[0]
+	addr, _, _ := strings.Cut(fip.Network, "/")
 	responses := make(map[string]int)
 	errors := 0
 	bound := false
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		response, err := testkit.HelloNginx(s.T().Context(), addr, 80)
 
 		// The first 25 requests may err, as the Floating IP has to propagate
@@ -1061,7 +1040,6 @@ func (s *IntegrationTestSuite) RunTestServiceWithFloatingIP(
 }
 
 func (s *IntegrationTestSuite) TestFloatingIPConflicts() {
-
 	// Create a regional floating IP
 	regional, err := s.CreateRegionalFloatingIP(s.Region())
 	s.Require().NoError(err)
@@ -1098,7 +1076,6 @@ func (s *IntegrationTestSuite) TestFloatingIPConflicts() {
 }
 
 func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
-
 	const curlImage = "docker.io/curlimages/curl@sha256:b3f1fb2a51d923260350d21b8654bbc607164a987e2f7c84a0ac199a67df812a"
 
 	// Deploy our http-echo server to check for proxy connections
@@ -1129,19 +1106,18 @@ func (s *IntegrationTestSuite) TestServiceProxyProtocol() {
 	addr := service.Status.LoadBalancer.Ingress[0].IP
 	url := fmt.Sprintf("http://%s/proxy-protocol/used", addr)
 
-	// Wait for respones to work
+	// Wait for responses to work
 	s.T().Log("Waiting for http-echo responses")
 	errors := 0
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		_, err := testkit.HTTPRead(s.T().Context(), url)
 
 		if err == nil {
 			break
-		} else {
-			s.T().Logf("Request %d failed: %s", i, err)
-			errors++
 		}
+		s.T().Logf("Request %d failed: %s", i, err)
+		errors++
 
 		time.Sleep(5 * time.Millisecond)
 	}
