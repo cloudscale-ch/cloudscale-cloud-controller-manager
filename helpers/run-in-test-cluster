@@ -222,16 +222,19 @@ function debug-rollout-failure() {
 function apply-resources() {
   api_url=$(echo "${CLOUDSCALE_API_URL-https://api.cloudscale.ch}" | sed 's|/v1||g')
 
+  # Ensure the imported image is used, and no image is pulled
+  # from a remote registry.
+  pull_policy=IfNotPresent
+  if [[ "${IMAGE_SOURCE-build}" == "import" ]]; then
+    pull_policy=Never
+  fi
+
+  # No sed -i, it is not portable between GNU and BSD (macOS) sed
   sed "s|${LATEST}|${IMAGE}|g" \
     deploy/latest.yml \
     | sed "s|https://api.cloudscale.ch|${api_url}|g" \
+    | sed "s|imagePullPolicy: IfNotPresent|imagePullPolicy: ${pull_policy}|g" \
     > /tmp/ccm.yml
-
-  if [[ "${IMAGE_SOURCE-build}" == "import" ]]; then
-    # Ensure the imported image is used, and no image is pulled
-    # from a remote registry.
-    sed -i 's|imagePullPolicy: IfNotPresent|imagePullPolicy: Never|g' /tmp/ccm.yml
-  fi
 
   export KUBECONFIG=k8test/cluster/admin.conf
   kubectl delete -f /tmp/ccm.yml --ignore-not-found=true
