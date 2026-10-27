@@ -3,7 +3,7 @@
 ## Overview
 
 Releases are fully automated via GitHub Actions. Pushing a tag matching `v*.*.*`
-triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which:
+triggers [`.github/workflows/release.yml`](../.github/workflows/release.yml), which:
 
 1. Runs `govulncheck` to check for known vulnerabilities.
 2. Builds and pushes the container image to [quay.io](https://quay.io).
@@ -53,11 +53,14 @@ Before creating a release tag, ensure:
 
 ## Release Notes
 
-GitHub Actions automatically generates release notes when the release workflow runs. After the workflow completes:
+GitHub Actions automatically generates release notes when the release workflow runs. The workflow prepends a
+"Configuration" section with the version-specific `kubectl apply` command to the generated notes. After the workflow
+completes:
 
 1. Navigate to the GitHub Release
 2. Review the auto-generated notes
 3. If necessary, amend with any special notes, migration guidance, or highlights that aren't captured automatically
+4. Keep the "Configuration" section; the README points users to it
 
 ## Regular release
 
@@ -116,18 +119,31 @@ GitHub Actions automatically generates release notes when the release workflow r
 
 4. **Test installation on a test cluster**:
 
+   Requires `CLOUDSCALE_API_TOKEN`, SSH access to `cloudscale-ch/k8test`, python3, `docker` and `kubectl`.
+
    ```bash
-   # Create a test cluster with the released image
+   # Import the released image; the default (IMAGE_SOURCE=build) would build the local checkout instead
    export IMAGE=quay.io/cloudscalech/cloudscale-cloud-controller-manager:v1.2.3
-   helpers/run-in-test-cluster
+   docker pull --platform linux/amd64 "$IMAGE"
+   docker save "$IMAGE" -o image.tar
+   IMAGE_SOURCE=import helpers/run-in-test-cluster
 
    # Verify CCM is running
+   export KUBECONFIG=k8test/cluster/admin.conf
    kubectl get daemonset cloudscale-cloud-controller-manager -n kube-system
    kubectl logs -l k8s-app=cloudscale-cloud-controller-manager -n kube-system
 
    # Cleanup
    helpers/cleanup
+   rm image.tar
    ```
+
+## If the workflow fails
+
+- **`govulncheck`**: nothing was published. Delete the tag (`git push --delete origin v1.2.3`, `git tag -d v1.2.3`),
+  fix the findings and tag again.
+- **Any later step**: delete the release if it exists (`gh release delete v1.2.3 --yes`, the tag is kept), then
+  re-run the job.
 
 ## Pre-release
 
@@ -135,7 +151,7 @@ For release candidates, alpha, or beta versions, append a hyphen and identifier
 to the version tag:
 
 ```bash
-git tag v1.2.3-alpha.1
+git tag -a v1.2.3-alpha.1 -m 'Version v1.2.3-alpha.1'
 git push origin v1.2.3-alpha.1
 ```
 
@@ -151,4 +167,18 @@ The container image is pushed with the exact same tag (e.g. `v1.2.3-alpha.1`),
 and the same signing and attestation steps are applied. Pre-releases also get
 `config.yml` and the install command in the release notes, but the `:latest`
 image tag is not moved.
+
+## Backport release
+
+To release a fix for an older version, tag the commit on its maintenance branch
+instead of `main`:
+
+```bash
+git checkout release-1.1
+git tag -a v1.1.4 -m 'Version v1.1.4'
+git push origin v1.1.4
+```
+
+The same workflow runs. The `:latest` image tag is only moved when the tag is
+the highest released version, so a backport leaves it on the newer release.
 
