@@ -53,7 +53,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 	}
 
 	path := fmt.Sprintf("%s/cluster/admin.conf", k8test)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 - Path from the test environment
 	if err != nil {
 		log.Fatalf("failed to read kubeconfig: %s\n", err)
 	}
@@ -82,18 +82,16 @@ func (s *IntegrationTestSuite) SetupSuite() {
 	httpClient.Timeout = 10 * time.Second
 
 	s.api = cloudscale.NewClient(httpClient)
-	s.api.UserAgent = s.api.UserAgent + " ccm/integration"
+	s.api.UserAgent += " ccm/integration"
 }
 
 func (s *IntegrationTestSuite) SetupTest() {
-	s.ns = fmt.Sprintf("cloudscale-test-%08x", rand.Uint32())
+	s.ns = fmt.Sprintf("cloudscale-test-%08x", rand.Uint32()) // #nosec G404 - Unique name, not a secret
 
 	_, err := s.k8s.CoreV1().Namespaces().Create(
 		context.Background(),
 		&v1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: s.ns,
-			},
+			Name: s.ns,
 		},
 		metav1.CreateOptions{},
 	)
@@ -109,7 +107,6 @@ func (s *IntegrationTestSuite) Region() string {
 
 func (s *IntegrationTestSuite) CreateGlobalFloatingIP() (
 	*cloudscale.FloatingIP, error) {
-
 	ip, err := s.api.FloatingIPs.Create(
 		context.Background(), &cloudscale.FloatingIPCreateRequest{
 			IPVersion: 4,
@@ -128,14 +125,11 @@ func (s *IntegrationTestSuite) CreateGlobalFloatingIP() (
 
 func (s *IntegrationTestSuite) CreateRegionalFloatingIP(region string) (
 	*cloudscale.FloatingIP, error) {
-
 	ip, err := s.api.FloatingIPs.Create(
 		context.Background(), &cloudscale.FloatingIPCreateRequest{
 			IPVersion: 4,
 			Type:      "regional",
-			RegionalResourceRequest: cloudscale.RegionalResourceRequest{
-				Region: region,
-			},
+			Region:    region,
 		},
 	)
 

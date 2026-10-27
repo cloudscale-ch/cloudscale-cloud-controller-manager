@@ -88,7 +88,6 @@ func (s *IntegrationTestSuite) FirstServerMatching(name string) *cloudscale.Serv
 }
 
 func (s *IntegrationTestSuite) TestNodesReady() {
-
 	// Make sure we have at least one control, and some workers
 	controls := s.NodesLabeled("node-role.kubernetes.io/control-plane")
 	assert.True(s.T(), len(controls) > 0, "no controls found")
@@ -98,7 +97,6 @@ func (s *IntegrationTestSuite) TestNodesReady() {
 }
 
 func (s *IntegrationTestSuite) TestNodesInitialized() {
-
 	// None of the nodes should be uninitailized (this taint is removed, once
 	// the CCM has responded).
 	nodes := s.NodesFiltered(func(n *v1.Node) bool {
@@ -110,7 +108,6 @@ func (s *IntegrationTestSuite) TestNodesInitialized() {
 		return false
 	})
 	assert.True(s.T(), len(nodes) == 0, "found uninitialized nodes")
-
 }
 
 func (s *IntegrationTestSuite) TestNodeMetadata() {
@@ -122,7 +119,7 @@ func (s *IntegrationTestSuite) TestNodeMetadata() {
 
 		assert.Equal(s.T(),
 			fmt.Sprintf("cloudscale://%s", server.UUID),
-			string(node.Spec.ProviderID),
+			node.Spec.ProviderID,
 			"node has wrong provider id: %s", node.Name)
 
 		assert.Equal(s.T(),
