@@ -143,10 +143,24 @@ jobs:
           sed "s|:latest|:${TAG}|" deploy/latest.yml > config.yml
           grep -q "cloudscale-cloud-controller-manager:${TAG}$" config.yml
 
+      # Backports and pre-releases must neither become the "Latest" GitHub
+      # release nor move :latest, so both depend on this check.
+      - name: Check if this is the highest version
+        id: version
+        run: |
+          HIGHEST=$(git tag -l 'v*.*.*' --sort=-v:refname | grep -v -- '-' | head -n1)
+          if [[ "$TAG" == "$HIGHEST" ]]; then
+            echo "highest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "highest=false" >> "$GITHUB_OUTPUT"
+            echo "$TAG is not the highest full release, $HIGHEST is"
+          fi
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_URL: https://github.com/${{ github.repository }}
+          IS_HIGHEST: ${{ steps.version.outputs.highest }}
         run: |
           PRERELEASE_FLAG=""
           if [[ "$TAG" == *-* ]]; then
@@ -167,6 +181,7 @@ jobs:
           gh release create "$TAG" \
             --generate-notes \
             --notes "$NOTES" \
+            --latest="$IS_HIGHEST" \
             $PRERELEASE_FLAG \
             sbom.spdx.json \
             config.yml
@@ -175,13 +190,7 @@ jobs:
       # published release. Moved only for full releases with the highest
       # version, so a backport release does not replace a newer image.
       - name: Tag image as latest
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: ${{ !contains(github.ref_name, '-') && steps.version.outputs.highest == 'true' }}
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
-        run: |
-          HIGHEST=$(git tag -l 'v*.*.*' --sort=-v:refname | grep -v -- '-' | head -n1)
-          if [[ "$TAG" != "$HIGHEST" ]]; then
-            echo "Skipped :latest update, $HIGHEST is newer than $TAG"
-            exit 0
-          fi
-          docker buildx imagetools create -t "${IMG_REPO}:latest" "${IMG_REPO}@${DIGEST}"
+        run: docker buildx imagetools create -t "${IMG_REPO}:latest" "${IMG_REPO}@${DIGEST}"

@@ -12,7 +12,7 @@ triggers [`.github/workflows/release.yml`](../.github/workflows/release.yml), wh
 5. Renders the install manifest `config.yml` from [`deploy/latest.yml`](../deploy/latest.yml), pinned to the
    released image tag.
 6. Creates a GitHub Release with the `kubectl apply` install command prepended to the generated notes, and
-   `config.yml` and the SBOM attached.
+   `config.yml` and the SBOM attached. It is marked as the latest GitHub release only for the highest version.
 7. Moves the `:latest` image tag to the new image, for full releases with the highest version only.
 
 ## Required Tools
@@ -111,6 +111,9 @@ completes:
    # Verify the install manifest is attached and pinned to the release
    gh release download v1.2.3 --pattern config.yml --output - | grep "image:"
 
+   # Verify the latest GitHub release is the highest version; fix with: gh release edit <highest> --latest
+   gh release view --json tagName --jq .tagName
+
    # Verify :latest points to the released image (full releases only)
    docker buildx imagetools inspect "$IMG" --format '{{json .Manifest.Digest}}'
    docker buildx imagetools inspect quay.io/cloudscalech/cloudscale-cloud-controller-manager:latest \
@@ -181,4 +184,6 @@ git push origin v1.1.4
 
 The same workflow runs. The `:latest` image tag is only moved when the tag is
 the highest released version, so a backport leaves it on the newer release.
+The backport is also not marked as the latest GitHub release, so
+`releases/latest` keeps pointing at the newer version.
 
