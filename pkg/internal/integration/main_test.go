@@ -22,8 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/cloudscale-ch/cloudscale-cloud-controller-manager/pkg/cloudscale_ccm"
 )
 
 func TestIntegration(t *testing.T) {
@@ -80,12 +78,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 		AccessToken: token,
 	})
 
-	httpClient := &http.Client{
-		Transport: &oauth2.Transport{
-			Source: tokenSource,
-			Base:   cloudscale_ccm.NewTransport(),
-		},
-	}
+	httpClient := oauth2.NewClient(context.Background(), tokenSource)
 	httpClient.Timeout = 10 * time.Second
 
 	s.api = cloudscale.NewClient(httpClient)

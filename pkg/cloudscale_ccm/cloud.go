@@ -1,10 +1,9 @@
 package cloudscale_ccm
 
 import (
+	"context"
 	"fmt"
 	"io"
-	"net"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -88,42 +87,13 @@ func newCloudscaleProvider(config io.Reader) (cloudprovider.Interface, error) {
 	}, nil
 }
 
-// NewTransport creates an http.Transport configured for the cloudscale.ch API.
-func NewTransport() *http.Transport {
-	return &http.Transport{
-		DialContext: (&net.Dialer{
-			Timeout:   5 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).DialContext,
-
-		TLSHandshakeTimeout: 5 * time.Second,
-
-		// needs to be set because we also set DialContext
-		ForceAttemptHTTP2: true,
-		HTTP2: &http.HTTP2Config{
-			SendPingTimeout: 5 * time.Second,
-			PingTimeout:     3 * time.Second,
-		},
-
-		IdleConnTimeout:     90 * time.Second,
-		MaxIdleConns:        50,
-		MaxIdleConnsPerHost: 50,
-		MaxConnsPerHost:     0,
-	}
-}
-
 // newCloudscaleClient spawns a new cloudscale API client.
 func newCloudscaleClient(token string, timeout time.Duration) *cloudscale.Client {
 	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{
 		AccessToken: token,
 	})
 
-	httpClient := &http.Client{
-		Transport: &oauth2.Transport{
-			Source: tokenSource,
-			Base:   NewTransport(),
-		},
-	}
+	httpClient := oauth2.NewClient(context.Background(), tokenSource)
 	httpClient.Timeout = timeout
 
 	klog.InfoS(
