@@ -2,8 +2,8 @@
 
 ## Overview
 
-Releases are fully automated via GitHub Actions. Pushing a tag matching `v*.*.*`
-triggers [`.github/workflows/release.yml`](../.github/workflows/release.yml), which:
+Releases are fully automated via GitHub Actions. Pushing a SemVer tag without a `v` prefix
+(e.g. `1.2.3`) triggers [`.github/workflows/release.yml`](../.github/workflows/release.yml), which:
 
 1. Runs `govulncheck` to check for known vulnerabilities.
 2. Builds and pushes the container image to [quay.io](https://quay.io).
@@ -69,8 +69,8 @@ completes:
    ```bash
    git checkout main
    git pull
-   git tag -a v1.2.3 -m 'Version v1.2.3'
-   git push origin v1.2.3
+   git tag -a 1.2.3 -m 'Version 1.2.3'
+   git push origin 1.2.3
    ```
 
 2. **Wait for the workflow** to finish in the GitHub Actions tab.
@@ -78,7 +78,7 @@ completes:
 3. **Verify the release**:
 
    ```bash
-   export IMG=quay.io/cloudscalech/cloudscale-cloud-controller-manager:v1.2.3
+   export IMG=quay.io/cloudscalech/cloudscale-cloud-controller-manager:1.2.3
    export ID_REGEXP='^https://github.com/cloudscale-ch/cloudscale-cloud-controller-manager/\.github/workflows/release\.yml@refs/tags/'
    export ISSUER=https://token.actions.githubusercontent.com
    ```
@@ -109,7 +109,7 @@ completes:
 
    ```bash
    # Verify the install manifest is attached and pinned to the release
-   gh release download v1.2.3 --pattern config.yml --output - | grep "image:"
+   gh release download 1.2.3 --pattern config.yml --output - | grep "image:"
 
    # Verify the latest GitHub release is the highest version; fix with: gh release edit <highest> --latest
    gh release view --json tagName --jq .tagName
@@ -126,7 +126,7 @@ completes:
 
    ```bash
    # Import the released image; the default (IMAGE_SOURCE=build) would build the local checkout instead
-   export IMAGE=quay.io/cloudscalech/cloudscale-cloud-controller-manager:v1.2.3
+   export IMAGE=quay.io/cloudscalech/cloudscale-cloud-controller-manager:1.2.3
    docker pull --platform linux/amd64 "$IMAGE"
    docker save "$IMAGE" -o image.tar
    IMAGE_SOURCE=import helpers/run-in-test-cluster
@@ -143,9 +143,9 @@ completes:
 
 ## If the workflow fails
 
-- **`govulncheck`**: nothing was published. Delete the tag (`git push --delete origin v1.2.3`, `git tag -d v1.2.3`),
+- **`govulncheck`**: nothing was published. Delete the tag (`git push --delete origin 1.2.3`, `git tag -d 1.2.3`),
   fix the findings and tag again.
-- **Any later step**: delete the release if it exists (`gh release delete v1.2.3 --yes`, the tag is kept), then
+- **Any later step**: delete the release if it exists (`gh release delete 1.2.3 --yes`, the tag is kept), then
   re-run the job.
 
 ## Pre-release
@@ -154,19 +154,19 @@ For release candidates, alpha, or beta versions, append a hyphen and identifier
 to the version tag:
 
 ```bash
-git tag -a v1.2.3-alpha.1 -m 'Version v1.2.3-alpha.1'
-git push origin v1.2.3-alpha.1
+git tag -a 1.2.3-alpha.1 -m 'Version 1.2.3-alpha.1'
+git push origin 1.2.3-alpha.1
 ```
 
 The workflow automatically detects the `-` in the tag name and marks the
 GitHub Release as a **pre-release**. Any of the following suffixes are valid
 per SemVer:
 
-- `v1.2.3-alpha.1`
-- `v1.2.3-beta.1`
-- `v1.2.3-rc.1`
+- `1.2.3-alpha.1`
+- `1.2.3-beta.1`
+- `1.2.3-rc.1`
 
-The container image is pushed with the exact same tag (e.g. `v1.2.3-alpha.1`),
+The container image is pushed with the exact same tag (e.g. `1.2.3-alpha.1`),
 and the same signing and attestation steps are applied. Pre-releases also get
 `config.yml` and the install command in the release notes, but the `:latest`
 image tag is not moved.
@@ -178,8 +178,8 @@ instead of `main`:
 
 ```bash
 git checkout release-1.1
-git tag -a v1.1.4 -m 'Version v1.1.4'
-git push origin v1.1.4
+git tag -a 1.1.4 -m 'Version 1.1.4'
+git push origin 1.1.4
 ```
 
 The same workflow runs. The `:latest` image tag is only moved when the tag is

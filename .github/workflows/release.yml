@@ -5,7 +5,8 @@ permissions: {}
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
 
 concurrency:
   group: ${{ github.ref }}
@@ -148,7 +149,7 @@ jobs:
       - name: Check if this is the highest version
         id: version
         run: |
-          HIGHEST=$(git tag -l 'v*.*.*' --sort=-v:refname | grep -v -- '-' | head -n1)
+          HIGHEST=$(git tag -l '[0-9]*.*.*' --sort=-v:refname | grep -v -- '-' | head -n1)
           if [[ "$TAG" == "$HIGHEST" ]]; then
             echo "highest=true" >> "$GITHUB_OUTPUT"
           else
