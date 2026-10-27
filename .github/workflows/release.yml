@@ -5,7 +5,8 @@ permissions: {}
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
 
 concurrency:
   group: ${{ github.ref }}
@@ -44,6 +45,13 @@ jobs:
       # before we build or push anything.
       - name: Run govulncheck
         run: make govulncheck
+
+      # The tag is baked into the binary as its version; make sure the
+      # binary still starts with it before anything is published.
+      - name: Smoke-test the binary with the release version
+        run: |
+          make build VERSION="$TAG"
+          ./bin/cloudscale-cloud-controller-manager --version
 
       - name: Login to quay.io
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
@@ -148,7 +156,7 @@ jobs:
       - name: Check if this is the highest version
         id: version
         run: |
-          HIGHEST=$(git tag -l 'v*.*.*' --sort=-v:refname | grep -v -- '-' | head -n1)
+          HIGHEST=$(git tag -l '[0-9]*.*.*' --sort=-v:refname | grep -v -- '-' | head -n1)
           if [[ "$TAG" == "$HIGHEST" ]]; then
             echo "highest=true" >> "$GITHUB_OUTPUT"
           else
