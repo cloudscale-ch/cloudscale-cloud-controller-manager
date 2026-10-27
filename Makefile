@@ -1,5 +1,5 @@
 # Image URL to use for building/pushing
-TAG ?= v0.0.0-dev
+TAG ?= 0.0.0-dev
 IMG ?= quay.io/cloudscalech/cloudscale-cloud-controller-manager:$(TAG)
 
 # Version metadata - TAG takes precedence, git as fallback
@@ -8,7 +8,9 @@ GIT_COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 # Set version metadata fields in k8s.io/component-base/version
-LDFLAGS ?= -X k8s.io/component-base/version.gitVersion=$(VERSION) \
+# gitVersion needs a v prefix, component-base panics on startup otherwise.
+# Release tags have none (1.2.3), so add it if missing.
+LDFLAGS ?= -X k8s.io/component-base/version.gitVersion=v$(patsubst v%,%,$(VERSION)) \
            -X k8s.io/component-base/version.gitCommit=$(GIT_COMMIT) \
            -X k8s.io/component-base/version.buildDate=$(BUILD_DATE)
 

@@ -10,7 +10,7 @@ COPY Makefile ./
 COPY pkg/ pkg/
 COPY cmd/ cmd/
 
-ARG VERSION=v0.0.0-dev
+ARG VERSION=0.0.0-dev
 ARG GIT_COMMIT
 ARG BUILD_DATE
 
