@@ -21,7 +21,7 @@ ENV BUILD_DATE=${BUILD_DATE}
 
 RUN make build
 
-FROM alpine:3.23.7
+FROM alpine:3.24.2
 RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /src/bin/cloudscale-cloud-controller-manager /usr/local/bin/cloudscale-cloud-controller-manager
